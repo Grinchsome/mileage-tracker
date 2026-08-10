@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0d2d70" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Mileage Tracker" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <title>Mileage Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="brand">Mileage Tracker</div>
+      <div class="subtle">Test Drive v1</div>
+    </div>
+    <div class="header-actions">
+      <button id="installBtn" class="mini primary hidden">Install</button>
+      <button id="settingsBtn" class="mini outline">Settings</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="home" class="screen active">
+      <div id="installHint" class="notice hidden"></div>
+      <div class="card">
+        <div class="label">Van</div>
+        <div class="row space"><strong id="vanRegHome">—</strong><span class="subtle" id="driverHome">Driver</span></div>
+        <hr>
+        <div class="label">Current odometer</div>
+        <div class="big"><span id="odoHome">0</span> <span class="unit">miles</span></div>
+      </div>
+      <div class="card">
+        <div class="label" id="monthLabel">This month</div>
+        <div class="kpi"><span>💼 Work</span><strong><span id="workTotal">0.0</span> miles</strong></div>
+        <div class="kpi"><span>👤 Personal</span><strong><span id="personalTotal">0.0</span> miles</strong></div>
+        <div class="kpi"><span>Σ Total</span><strong><span id="allTotal">0.0</span> miles</strong></div>
+      </div>
+      <button class="btn primary" id="newJourneyBtn">▶ START NEW JOURNEY</button>
+      <div id="activeResume" class="notice warn hidden">You have an active journey. <button id="resumeBtn" class="inline-btn">Resume →</button></div>
+    </section>
+
+    <section id="new" class="screen">
+      <h2>New Journey</h2>
+      <div class="field"><label>From</label><input id="fromInput" placeholder="Current location" /></div>
+      <div class="grid2 compact-actions">
+        <button class="btn outline" id="useLocationBtn">📍 Current</button>
+        <button class="btn outline" id="fromHomeBtn">⌂ Home</button>
+      </div>
+      <div class="field top-gap"><label>Destination</label><input id="destInput" placeholder="Where are you going?" /></div>
+      <div class="quick-title">Quick destination</div>
+      <div class="grid2 compact-actions">
+        <button class="btn outline" id="toHomeBtn">⌂ Home</button>
+        <button class="btn outline" id="toWorkBtn">💼 Work</button>
+      </div>
+      <div class="field top-gap"><label>Journey type</label>
+        <div class="grid2"><button class="btn work choice selected" data-type="Work">💼 WORK</button><button class="btn personal choice" data-type="Personal">👤 PERSONAL</button></div>
+      </div>
+      <div class="field" id="purposeField"><label>Purpose / Job (optional)</label><input id="purposeInput" placeholder="e.g. Service call / Venue visit" /></div>
+      <div class="field"><label>Starting odometer (optional)</label><input id="startOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
+      <button class="btn primary" id="startBtn">START JOURNEY</button>
+      <button class="btn outline" id="cancelNewBtn">Cancel</button>
+    </section>
+
+    <section id="active" class="screen">
+      <div class="card active-box">
+        <div class="pulse">📍</div>
+        <div class="small">Recording journey</div>
+        <div class="timer" id="timer">00:00</div>
+        <div class="big live"><span id="liveMiles">0.00</span> miles</div>
+        <div class="routebox">
+          <div class="small">From</div><strong id="activeFrom">—</strong>
+          <div class="small route-gap">To</div><strong id="activeTo">—</strong>
+          <div class="route-gap"><span id="activeType" class="tag work">WORK</span></div>
+        </div>
+        <div class="notice">Keep Mileage Tracker running while driving for this test version. Phone browsers may pause GPS when suspended or heavily backgrounded.</div>
+        <button class="btn outline" id="openMapsBtn">OPEN IN GOOGLE MAPS</button>
+        <button class="btn danger" id="finishBtn">END JOURNEY</button>
+      </div>
+    </section>
+
+    <section id="history" class="screen">
+      <div class="row space section-head"><h2>Journey History</h2><button id="addMissedBtn" class="mini outline">+ Missed</button></div>
+      <div class="card" id="historyList"></div>
+    </section>
+
+    <section id="monthly" class="screen">
+      <h2>Monthly Return</h2>
+      <div class="card">
+        <div class="grid2"><div><div class="label">Starting odometer</div><strong id="monthStartOdo">—</strong></div><div><div class="label">Ending odometer</div><strong id="monthEndOdo">—</strong></div></div>
+        <hr>
+        <div class="kpi"><span>Work mileage</span><strong><span id="monthWork">0.0</span> miles</strong></div>
+        <div class="kpi"><span>Personal mileage</span><strong><span id="monthPersonal">0.0</span> miles</strong></div>
+        <div class="kpi"><span>Total recorded</span><strong><span id="monthTotal">0.0</span> miles</strong></div>
+        <div id="reconcileBox" class="notice top-gap">Enter monthly start/end odometer in Settings to reconcile mileage.</div>
+      </div>
+      <button class="btn primary" id="previewReturnBtn">PREVIEW COMPANY RETURN</button>
+      <button class="btn outline" id="exportCsvBtn">EXPORT CSV</button>
+      <button class="btn outline" id="exportXlsBtn">EXPORT EXCEL-COMPATIBLE .XLS</button>
+    </section>
+  </main>
+
+  <nav>
+    <button data-screen="home" class="active">⌂<br>Home</button>
+    <button data-screen="history">▤<br>History</button>
+    <button data-screen="monthly">▣<br>Monthly Return</button>
+  </nav>
+</div>
+
+<div id="settingsModal" class="modal hidden"><div class="sheet">
+  <h3>Settings</h3>
+  <div class="field"><label>Driver name</label><input id="driverInput" autocomplete="name" /></div>
+  <div class="field"><label>Vehicle registration</label><input id="vanRegInput" autocapitalize="characters" /></div>
+  <div class="field"><label>Default home location</label><input id="homeLocationInput" placeholder="e.g. Home address" autocomplete="street-address" /></div>
+  <div class="field"><label>Default work location</label><input id="workLocationInput" placeholder="e.g. Stage Electrics, Bristol" /></div>
+  <div class="field"><label>Current odometer</label><input id="currentOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
+  <div class="grid2">
+    <div class="field"><label>Month start odometer</label><input id="monthStartInput" type="number" inputmode="decimal" step="0.1" /></div>
+    <div class="field"><label>Month end odometer</label><input id="monthEndInput" type="number" inputmode="decimal" step="0.1" /></div>
+  </div>
+  <button class="btn primary" id="saveSettingsBtn">SAVE SETTINGS</button>
+  <button class="btn outline" id="closeSettingsBtn">Close</button>
+  <button class="btn danger" id="resetBtn">Reset test data</button>
+</div></div>
+
+<div id="finishModal" class="modal hidden"><div class="sheet">
+  <h3>Journey Complete</h3>
+  <div id="finishSummary" class="card"></div>
+  <div class="field"><label>Distance to save (miles)</label><input id="finishMilesInput" type="number" inputmode="decimal" step="0.01" /></div>
+  <div class="field"><label>Ending odometer (optional)</label><input id="finishOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
+  <button class="btn primary" id="saveJourneyBtn">FINISH & SAVE</button>
+  <button class="btn outline" id="continueJourneyBtn">Continue journey</button>
+</div></div>
+
+<div id="missedModal" class="modal hidden"><div class="sheet">
+  <h3>Add Missed Journey</h3>
+  <div class="field"><label>Date</label><input id="missedDate" type="date" /></div>
+  <div class="field"><label>From</label><input id="missedFrom" /></div>
+  <div class="field"><label>To</label><input id="missedTo" /></div>
+  <div class="grid2"><button class="btn work missedType selected" data-type="Work">WORK</button><button class="btn personal missedType" data-type="Personal">PERSONAL</button></div>
+  <div class="field top-gap"><label>Purpose</label><input id="missedPurpose" /></div>
+  <div class="field"><label>Distance (miles)</label><input id="missedMiles" type="number" inputmode="decimal" step="0.01" /></div>
+  <button class="btn primary" id="saveMissedBtn">SAVE JOURNEY</button>
+  <button class="btn outline" id="closeMissedBtn">Cancel</button>
+</div></div>
+
+<div id="returnModal" class="modal hidden"><div class="sheet">
+  <h3>Company Mileage Return Preview</h3>
+  <div class="small">Preview based on the company declaration structure.</div>
+  <div class="table-wrap"><table class="table" id="returnTable"></table></div>
+  <button class="btn outline" id="closeReturnBtn">Close</button>
+</div></div>
+
+<script src="app.js" defer></script>
+</body>
+</html>
