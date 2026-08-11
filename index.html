@@ -18,7 +18,7 @@
   <header>
     <div>
       <div class="brand">Mileage Tracker</div>
-      <div class="subtle">Test Drive v1</div>
+      <div class="subtle">Test Drive v2</div>
     </div>
     <div class="header-actions">
       <button id="installBtn" class="mini primary hidden">Install</button>
@@ -28,6 +28,7 @@
 
   <main>
     <section id="home" class="screen active">
+      <div id="updateHint" class="notice ok hidden">A new version is ready. <button id="reloadBtn" class="inline-btn">Reload app</button></div>
       <div id="installHint" class="notice hidden"></div>
       <div class="card">
         <div class="label">Van</div>
@@ -43,43 +44,58 @@
         <div class="kpi"><span>Σ Total</span><strong><span id="allTotal">0.0</span> miles</strong></div>
       </div>
       <button class="btn primary" id="newJourneyBtn">▶ START NEW JOURNEY</button>
-      <div id="activeResume" class="notice warn hidden">You have an active journey. <button id="resumeBtn" class="inline-btn">Resume →</button></div>
+      <div id="activeResume" class="notice warn hidden">You have a journey waiting to be completed. <button id="resumeBtn" class="inline-btn">Resume →</button></div>
     </section>
 
     <section id="new" class="screen">
       <h2>New Journey</h2>
       <div class="field"><label>From</label><input id="fromInput" placeholder="Current location" /></div>
-      <div class="grid2 compact-actions">
+      <div id="fromStatus" class="subtle location-status"></div>
+      <div class="grid3 compact-actions">
         <button class="btn outline" id="useLocationBtn">📍 Current</button>
         <button class="btn outline" id="fromHomeBtn">⌂ Home</button>
+        <button class="btn outline" id="fromWorkBtn">💼 Work</button>
       </div>
+
       <div class="field top-gap"><label>Destination</label><input id="destInput" placeholder="Where are you going?" /></div>
       <div class="quick-title">Quick destination</div>
       <div class="grid2 compact-actions">
         <button class="btn outline" id="toHomeBtn">⌂ Home</button>
         <button class="btn outline" id="toWorkBtn">💼 Work</button>
       </div>
+
       <div class="field top-gap"><label>Journey type</label>
         <div class="grid2"><button class="btn work choice selected" data-type="Work">💼 WORK</button><button class="btn personal choice" data-type="Personal">👤 PERSONAL</button></div>
       </div>
       <div class="field" id="purposeField"><label>Purpose / Job (optional)</label><input id="purposeInput" placeholder="e.g. Service call / Venue visit" /></div>
       <div class="field"><label>Starting odometer (optional)</label><input id="startOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
+
+      <div class="route-estimate card soft-card">
+        <div class="row space"><div><div class="label">Route mileage</div><strong id="routeMilesText">Not calculated</strong></div><span id="routeStatusTag" class="tag neutral">ROUTE</span></div>
+        <div id="routeMessage" class="small top-gap-small">Calculate the route before opening Google Maps. You can still adjust the mileage when you finish.</div>
+        <div class="grid2 compact-actions top-gap-small">
+          <button class="btn outline" id="calculateRouteBtn">CALCULATE ROUTE</button>
+          <button class="btn outline" id="manualRouteBtn">ENTER MANUALLY</button>
+        </div>
+      </div>
+
       <button class="btn primary" id="startBtn">START JOURNEY</button>
       <button class="btn outline" id="cancelNewBtn">Cancel</button>
     </section>
 
     <section id="active" class="screen">
       <div class="card active-box">
-        <div class="pulse">📍</div>
-        <div class="small">Recording journey</div>
+        <div class="pulse">🚐</div>
+        <div class="small">Journey in progress</div>
         <div class="timer" id="timer">00:00</div>
         <div class="big live"><span id="liveMiles">0.00</span> miles</div>
+        <div class="small">planned route mileage</div>
         <div class="routebox">
           <div class="small">From</div><strong id="activeFrom">—</strong>
           <div class="small route-gap">To</div><strong id="activeTo">—</strong>
           <div class="route-gap"><span id="activeType" class="tag work">WORK</span></div>
         </div>
-        <div class="notice">Keep Mileage Tracker running while driving for this test version. Phone browsers may pause GPS when suspended or heavily backgrounded.</div>
+        <div class="notice ok">Version 2 saves the planned road-route distance before Google Maps opens. It no longer relies on browser GPS continuing in the background.</div>
         <button class="btn outline" id="openMapsBtn">OPEN IN GOOGLE MAPS</button>
         <button class="btn danger" id="finishBtn">END JOURNEY</button>
       </div>
@@ -119,6 +135,9 @@
   <div class="field"><label>Vehicle registration</label><input id="vanRegInput" autocapitalize="characters" /></div>
   <div class="field"><label>Default home location</label><input id="homeLocationInput" placeholder="e.g. Home address" autocomplete="street-address" /></div>
   <div class="field"><label>Default work location</label><input id="workLocationInput" placeholder="e.g. Stage Electrics, Bristol" /></div>
+  <div class="field"><label>Google Maps Platform API key</label><input id="mapsApiKeyInput" type="password" autocomplete="off" placeholder="Stored only on this device" /></div>
+  <div class="notice"><strong>For address lookup + route mileage.</strong> Enable Maps JavaScript API, Routes API and Geocoding API for the key. Restrict the key to your GitHub Pages website. The key is kept in this phone/browser's local storage, not added to the GitHub files.</div>
+  <div id="mapsApiStatus" class="small"></div>
   <div class="field"><label>Current odometer</label><input id="currentOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
   <div class="grid2">
     <div class="field"><label>Month start odometer</label><input id="monthStartInput" type="number" inputmode="decimal" step="0.1" /></div>
@@ -129,11 +148,20 @@
   <button class="btn danger" id="resetBtn">Reset test data</button>
 </div></div>
 
+<div id="manualRouteModal" class="modal hidden"><div class="sheet">
+  <h3>Enter Route Mileage</h3>
+  <div class="small">Use this if Google route calculation is unavailable, or if you already know the expected mileage.</div>
+  <div class="field top-gap"><label>Planned route distance (miles)</label><input id="manualRouteMilesInput" type="number" inputmode="decimal" step="0.1" /></div>
+  <button class="btn primary" id="saveManualRouteBtn">USE THIS MILEAGE</button>
+  <button class="btn outline" id="closeManualRouteBtn">Cancel</button>
+</div></div>
+
 <div id="finishModal" class="modal hidden"><div class="sheet">
   <h3>Journey Complete</h3>
   <div id="finishSummary" class="card"></div>
   <div class="field"><label>Distance to save (miles)</label><input id="finishMilesInput" type="number" inputmode="decimal" step="0.01" /></div>
-  <div class="field"><label>Ending odometer (optional)</label><input id="finishOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
+  <div class="small finish-help">This starts with the planned route mileage. Change it if a diversion or detour made the actual journey different.</div>
+  <div class="field top-gap"><label>Ending odometer (optional)</label><input id="finishOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
   <button class="btn primary" id="saveJourneyBtn">FINISH & SAVE</button>
   <button class="btn outline" id="continueJourneyBtn">Continue journey</button>
 </div></div>

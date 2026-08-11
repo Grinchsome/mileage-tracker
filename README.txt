@@ -1,37 +1,56 @@
-Mileage Tracker - Installable Test Drive PWA v1
+MILEAGE TRACKER - TEST DRIVE V2
+===============================
 
-WHAT THIS BUILD ADDS
-- Installable Progressive Web App structure
-- Home-screen app icon and standalone display
-- Offline app shell after first successful load
-- Default Home Location in Settings
-- Quick destination buttons for Home and Work
-- Quick Home start-location button
-- All previous Work/Personal tracking, GPS, history, missed journey, reconciliation and exports
+WHAT CHANGED IN V2
+------------------
+1. Current Location now stores GPS coordinates and can convert them to a readable street address.
+2. Saved Home and Work locations can be recognised automatically when the GPS position is nearby.
+3. Mileage is calculated BEFORE Google Maps opens, so the app no longer depends on browser GPS continuing in the background.
+4. The route mileage is pre-filled at journey completion and can be corrected for diversions/detours.
+5. GPS start coordinates are retained in the journey record and included in CSV export.
+6. Existing Version 1 data is migrated automatically on the same phone/browser.
 
-IMPORTANT: INSTALLATION NEEDS HTTPS
-A PWA must normally be opened from a secure HTTPS website before a phone will offer normal app installation and before location permissions work reliably. Opening index.html directly from the ZIP is useful for reviewing the interface but is not the proper install/test route.
+IMPORTANT - GOOGLE MAPS SETUP
+-----------------------------
+The app files DO NOT contain your Google API key. This is intentional because a GitHub Pages repository may be public.
 
-EASIEST TEST-DRIVE ROUTE
-1. Put the contents of this folder on any HTTPS static web host.
-2. Open the HTTPS address on your phone.
-3. Allow Location permission.
-4. Use the browser's Install/Add to Home Screen option (or the in-app Install button when available).
-5. Open Mileage Tracker from the new home-screen icon.
-6. Go to Settings and enter Driver, Van Registration, Default Home Location, Default Work Location and current odometer.
+On your phone:
+1. Update the GitHub repository by replacing index.html, app.js, styles.css, manifest.webmanifest and sw.js with the Version 2 files. Keep the icons folder.
+2. Wait for GitHub Pages to deploy (normally a minute or two).
+3. Open the installed Mileage Tracker. If it still looks like v1, fully close it and reopen it, or open the GitHub Pages URL in Chrome and refresh. V2 includes a new service-worker cache.
+4. Open Settings.
+5. Paste your Google Maps Platform API key into the API key field and Save Settings.
 
-ANDROID
-Open the hosted HTTPS address in Chrome. When the app meets install criteria, use the Install prompt/button or Chrome menu's app/home-screen installation option.
+For Google route/address features the Google Cloud project should have:
+- Maps JavaScript API enabled
+- Routes API enabled
+- Geocoding API enabled
+- Billing enabled for Google Maps Platform
 
-iPHONE
-Open the hosted HTTPS address in Safari and use Share > Add to Home Screen. The app will then launch in a standalone window from its icon.
+SECURITY
+--------
+Restrict your Google API key in Google Cloud Console to your GitHub Pages website using a Website / HTTP referrer restriction, for example:
+https://YOUR-USERNAME.github.io/*
 
-TESTING NOTES
-- Keep the app running during a journey in this PWA test version. Mobile browsers can pause location tracking when the app is suspended/backgrounded.
-- Google Maps navigation opens separately.
-- This build does not use a paid Google API. Destination entry is manual plus Home/Work shortcuts.
-- Data is stored locally on that browser/device. Clearing site data removes it.
-- The .xls export is Excel-compatible HTML, not yet direct modification of the company's original legacy .xls template.
+Also restrict the key to only the APIs the app needs.
 
-PRODUCTION MOBILE BUILD LATER
-For robust locked-screen/background GPS, we should move the approved workflow into a native/cross-platform mobile wrapper (for example Flutter or React Native) with native background location permission handling.
+The key is stored locally in the browser on each device. It is not written into these app files or uploaded to GitHub by the app.
+
+NO API KEY?
+-----------
+The app still works. Use ENTER MANUALLY for planned route mileage. Current Location will still capture GPS coordinates, but it cannot turn them into a postal address without the Google service.
+
+TEST ROUTINE
+------------
+For the first V2 test:
+1. Settings: enter Home, Work and Google API key, then Save.
+2. New Journey > Current. Confirm that a readable starting address appears.
+3. Enter destination > Calculate Route. Confirm mileage looks sensible.
+4. Start Journey > Google Maps.
+5. On arrival reopen Mileage Tracker > End Journey.
+6. Confirm/adjust mileage and save.
+7. Check Journey History and Monthly Return.
+
+PRIVACY
+-------
+Journey data and the Google API key are stored in local browser storage on the device. Clearing Chrome site data or resetting the app removes them. Export records regularly while testing.

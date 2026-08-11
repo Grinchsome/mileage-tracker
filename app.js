@@ -1,61 +1,309 @@
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const STORAGE='mileageTrackerTestDriveV1';
-const defaults={settings:{driver:'',vanReg:'VN22 XBC',homeLocation:'',workLocation:'Stage Electrics, Bristol',currentOdo:48236,monthStartOdo:null,monthEndOdo:null},journeys:[],active:null};
-let state=JSON.parse(localStorage.getItem(STORAGE)||'null')||structuredClone(defaults);
-state.settings={...defaults.settings,...(state.settings||{})}; state.journeys=state.journeys||[];
-let selectedType='Work',missedType='Work',watchId=null,timerId=null,deferredInstallPrompt=null;
-const fmt=n=>(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
-const esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-function save(){localStorage.setItem(STORAGE,JSON.stringify(state));renderAll()}
-function currentMonthKey(d=new Date()){return d.toISOString().slice(0,7)}
-function monthJourneys(){return state.journeys.filter(j=>String(j.date).slice(0,7)===currentMonthKey())}
-function totals(){let w=0,p=0;monthJourneys().forEach(j=>j.type==='Work'?w+=+j.miles:p+=+j.miles);return{w,p,t:w+p}}
-function showScreen(id){$$('.screen').forEach(x=>x.classList.toggle('active',x.id===id));$$('nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));window.scrollTo(0,0);if(id==='active')startTimer()}
-function renderAll(){const t=totals();$('#vanRegHome').textContent=state.settings.vanReg||'—';$('#driverHome').textContent=state.settings.driver||'Driver';$('#odoHome').textContent=Number(state.settings.currentOdo||0).toLocaleString();$('#workTotal').textContent=fmt(t.w);$('#personalTotal').textContent=fmt(t.p);$('#allTotal').textContent=fmt(t.t);$('#monthWork').textContent=fmt(t.w);$('#monthPersonal').textContent=fmt(t.p);$('#monthTotal').textContent=fmt(t.t);$('#monthLabel').textContent=new Date().toLocaleDateString(undefined,{month:'long',year:'numeric'});$('#activeResume').classList.toggle('hidden',!state.active);renderHistory();renderMonthly();if(state.active)renderActive()}
-function renderHistory(){const root=$('#historyList'),js=[...state.journeys].sort((a,b)=>new Date(b.date)-new Date(a.date));if(!js.length){root.innerHTML='<div class="center subtle">No journeys recorded yet.</div>';return}root.innerHTML=js.map(j=>`<div class="journey"><div class="row space"><div><div class="journey-title">${esc(j.from)} → ${esc(j.to)}</div><div class="journey-meta">${new Date(j.date).toLocaleString()} · <span class="tag ${j.type.toLowerCase()}">${j.type.toUpperCase()}</span>${j.purpose?' · '+esc(j.purpose):''}</div></div><div class="miles">${(+j.miles).toFixed(1)} mi</div></div></div>`).join('')}
-function renderMonthly(){const js=monthJourneys(),starts=js.map(j=>+j.startOdo).filter(Number.isFinite),ends=js.map(j=>+j.endOdo).filter(Number.isFinite);const s=state.settings.monthStartOdo??(starts.length?Math.min(...starts):null),e=state.settings.monthEndOdo??(ends.length?Math.max(...ends):null);$('#monthStartOdo').textContent=s==null?'—':Number(s).toLocaleString();$('#monthEndOdo').textContent=e==null?'—':Number(e).toLocaleString();const box=$('#reconcileBox'),t=totals();if(s!=null&&e!=null){const travelled=e-s,diff=travelled-t.t;box.className='notice top-gap '+(Math.abs(diff)<0.11?'ok':'warn');box.textContent=`Van travelled ${fmt(travelled)} miles · Recorded ${fmt(t.t)} miles · Difference ${fmt(diff)} miles${Math.abs(diff)<0.11?' ✓':''}`}else{box.className='notice top-gap';box.textContent='Enter monthly start/end odometer in Settings to reconcile mileage.'}}
-function hav(a,b){const R=3958.7613,rad=x=>x*Math.PI/180,dLat=rad(b.lat-a.lat),dLon=rad(b.lng-a.lng),q=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(q))}
-function locate(cb){if(!navigator.geolocation)return alert('Geolocation is not supported by this browser.');navigator.geolocation.getCurrentPosition(p=>cb({lat:p.coords.latitude,lng:p.coords.longitude}),()=>alert('Location access was not available. You can still enter the start manually.'),{enableHighAccuracy:true,timeout:10000})}
-function renderActive(){const a=state.active;if(!a)return;$('#activeFrom').textContent=a.from;$('#activeTo').textContent=a.to;$('#activeType').textContent=a.type.toUpperCase();$('#activeType').className='tag '+a.type.toLowerCase();$('#liveMiles').textContent=(a.miles||0).toFixed(2)}
-function startTimer(){clearInterval(timerId);timerId=setInterval(()=>{if(!state.active)return;const sec=Math.max(0,Math.floor((Date.now()-state.active.startedAt)/1000)),m=String(Math.floor(sec/60)).padStart(2,'0'),s=String(sec%60).padStart(2,'0');$('#timer').textContent=`${m}:${s}`},1000)}
-function startGps(){if(!navigator.geolocation||!state.active||watchId!=null)return;watchId=navigator.geolocation.watchPosition(p=>{const pt={lat:p.coords.latitude,lng:p.coords.longitude},a=state.active;if(!a)return;if(a.lastPoint){const d=hav(a.lastPoint,pt);if(d<1)a.miles=(a.miles||0)+d}a.lastPoint=pt;a.points=(a.points||0)+1;localStorage.setItem(STORAGE,JSON.stringify(state));renderActive()},()=>{}, {enableHighAccuracy:true,maximumAge:3000,timeout:10000})}
-function stopGps(){if(watchId!=null&&navigator.geolocation)navigator.geolocation.clearWatch(watchId);watchId=null}
-function setDestination(value){if(!value)return alert('Set this location first in Settings.');$('#destInput').value=value}
-function setStart(value){if(!value)return alert('Set this location first in Settings.');$('#fromInput').value=value}
-function companyRows(){return monthJourneys().filter(j=>j.type==='Work').sort((a,b)=>new Date(a.date)-new Date(b.date))}
-function download(name,text,type='text/plain'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const STORAGE = 'mileageTrackerTestDriveV2';
+const LEGACY_STORAGE = 'mileageTrackerTestDriveV1';
+const defaults = {
+  settings: {
+    driver: '', vanReg: 'VN22 XBC', homeLocation: '', workLocation: 'Stage Electrics, Bristol',
+    homeCoords: null, workCoords: null, mapsApiKey: '', currentOdo: 48236,
+    monthStartOdo: null, monthEndOdo: null
+  },
+  journeys: [], active: null
+};
+
+function clone(v){ return JSON.parse(JSON.stringify(v)); }
+function loadState(){
+  let raw = localStorage.getItem(STORAGE);
+  if (!raw) raw = localStorage.getItem(LEGACY_STORAGE);
+  let parsed = null;
+  try { parsed = raw ? JSON.parse(raw) : null; } catch (_) {}
+  const s = parsed || clone(defaults);
+  s.settings = {...defaults.settings, ...(s.settings || {})};
+  s.journeys = Array.isArray(s.journeys) ? s.journeys : [];
+  s.active = s.active || null;
+  return s;
+}
+let state = loadState();
+let selectedType = 'Work', missedType = 'Work', deferredInstallPrompt = null;
+let mapsLoadPromise = null, timerId = null;
+let draftStartCoords = null, routeDraft = null;
+
+const fmt = n => (Number(n) || 0).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
+const esc = s => String(s ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const metersToMiles = m => Number(m) / 1609.344;
+const round2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+const save = () => { localStorage.setItem(STORAGE, JSON.stringify(state)); renderAll(); };
+const currentMonthKey = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+const monthJourneys = () => state.journeys.filter(j => (j.date || '').slice(0,7) === currentMonthKey());
+const totals = () => monthJourneys().reduce((a,j)=>{const m=Number(j.miles)||0;a.all+=m;if(j.type==='Work')a.w+=m;else a.p+=m;return a;},{w:0,p:0,all:0});
+const companyRows = () => monthJourneys().filter(j=>j.type==='Work').sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+function showScreen(id){
+  $$('.screen').forEach(s=>s.classList.toggle('active',s.id===id));
+  $$('nav button').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
+  if(id==='active') renderActive();
+  if(id==='history') renderHistory();
+  if(id==='monthly') renderMonthly();
+  window.scrollTo(0,0);
+}
+
+function renderAll(){
+  const t=totals();
+  $('#vanRegHome').textContent=state.settings.vanReg||'—';
+  $('#driverHome').textContent=state.settings.driver||'Driver';
+  $('#odoHome').textContent=Number(state.settings.currentOdo||0).toLocaleString();
+  $('#workTotal').textContent=fmt(t.w); $('#personalTotal').textContent=fmt(t.p); $('#allTotal').textContent=fmt(t.all);
+  $('#monthLabel').textContent=new Date().toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  $('#activeResume').classList.toggle('hidden',!state.active);
+  renderHistory(); renderMonthly();
+}
+
+function renderHistory(){
+  const list=$('#historyList');
+  const rows=[...state.journeys].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(!rows.length){list.innerHTML='<div class="center subtle">No journeys recorded yet.</div>';return;}
+  list.innerHTML=rows.map(j=>`<div class="journey"><div class="row space"><div><div class="journey-title">${esc(j.from)} → ${esc(j.to)}</div><div class="journey-meta">${new Date(j.date).toLocaleString()} · ${j.routeSource==='google'?'Google route':j.routeSource==='manual'?'Manual route':'Recorded'}${j.purpose?' · '+esc(j.purpose):''}</div></div><div class="miles">${Number(j.miles).toFixed(1)} mi</div></div><div class="top-gap-small"><span class="tag ${j.type==='Work'?'work':'personal'}">${esc(j.type.toUpperCase())}</span></div></div>`).join('');
+}
+
+function renderMonthly(){
+  const t=totals(), s=state.settings.monthStartOdo, e=state.settings.monthEndOdo;
+  $('#monthStartOdo').textContent=s??'—'; $('#monthEndOdo').textContent=e??'—';
+  $('#monthWork').textContent=fmt(t.w); $('#monthPersonal').textContent=fmt(t.p); $('#monthTotal').textContent=fmt(t.all);
+  const box=$('#reconcileBox');
+  if(s!==null&&s!==''&&e!==null&&e!==''){
+    const odo=Number(e)-Number(s), diff=round2(odo-t.all);
+    box.className='notice top-gap '+(Math.abs(diff)<0.11?'ok':'warn');
+    box.innerHTML=`Van travelled <strong>${fmt(odo)}</strong> miles. Recorded <strong>${fmt(t.all)}</strong>. ${Math.abs(diff)<0.11?'Mileage reconciles ✓':`Difference: <strong>${fmt(diff)}</strong> miles.`}`;
+  } else {box.className='notice top-gap';box.textContent='Enter monthly start/end odometer in Settings to reconcile mileage.';}
+}
+
+function setChoice(type){
+  selectedType=type;
+  $$('.choice').forEach(b=>b.classList.toggle('selected',b.dataset.type===type));
+  $('#purposeField').classList.toggle('hidden',type!=='Work');
+}
+
+function clearNewJourney(){
+  $('#fromInput').value=''; $('#destInput').value=''; $('#purposeInput').value='';
+  $('#startOdoInput').value=state.settings.currentOdo||''; $('#fromStatus').textContent='';
+  draftStartCoords=null; routeDraft=null; renderRouteDraft(); setChoice('Work');
+}
+
+function renderRouteDraft(){
+  if(!routeDraft){
+    $('#routeMilesText').textContent='Not calculated'; $('#routeStatusTag').textContent='ROUTE'; $('#routeStatusTag').className='tag neutral';
+    $('#routeMessage').textContent='Calculate the route before opening Google Maps. You can still adjust the mileage when you finish.'; return;
+  }
+  $('#routeMilesText').textContent=`${Number(routeDraft.miles).toFixed(1)} miles`;
+  $('#routeStatusTag').textContent=routeDraft.source==='google'?'GOOGLE':'MANUAL';
+  $('#routeStatusTag').className='tag '+(routeDraft.source==='google'?'ok-tag':'neutral');
+  $('#routeMessage').textContent=routeDraft.durationText ? `Estimated driving time: ${routeDraft.durationText}. Mileage can be adjusted when you finish.` : 'Mileage can be adjusted when you finish.';
+}
+
+function nearestSavedLabel(coords){
+  if(!coords) return null;
+  const candidates=[['Home',state.settings.homeCoords,state.settings.homeLocation],['Work',state.settings.workCoords,state.settings.workLocation]];
+  for(const [label,c,addr] of candidates){
+    if(!c) continue;
+    if(distanceMeters(coords,c) <= 120) return {label,address:addr};
+  }
+  return null;
+}
+function distanceMeters(a,b){
+  const R=6371000, toRad=x=>x*Math.PI/180;
+  const p1=toRad(a.lat), p2=toRad(b.lat), dp=toRad(b.lat-a.lat), dl=toRad(b.lng-a.lng);
+  const h=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+function loadGoogleMaps(){
+  const key=(state.settings.mapsApiKey||'').trim();
+  if(!key) return Promise.reject(new Error('No Google Maps API key saved. Open Settings and add one, or enter route mileage manually.'));
+  if(window.google?.maps?.importLibrary) return Promise.resolve(window.google.maps);
+  if(mapsLoadPromise) return mapsLoadPromise;
+  mapsLoadPromise=new Promise((resolve,reject)=>{
+    const cb='__mileageMapsReady';
+    window[cb]=()=>{delete window[cb];resolve(window.google.maps);};
+    const script=document.createElement('script');
+    script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&callback=${cb}`;
+    script.async=true; script.defer=true;
+    script.onerror=()=>{mapsLoadPromise=null;reject(new Error('Google Maps could not load. Check the API key and its website restrictions.'));};
+    document.head.appendChild(script);
+  });
+  return mapsLoadPromise;
+}
+
+async function reverseGeocode(coords){
+  await loadGoogleMaps();
+  const {Geocoder}=await google.maps.importLibrary('geocoding');
+  const geocoder=new Geocoder();
+  const result=await geocoder.geocode({location:coords});
+  const best=(result.results||[])[0];
+  return best?.formatted_address || `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
+}
+
+async function geocodeAddress(address){
+  if(!address?.trim()) return null;
+  await loadGoogleMaps();
+  const {Geocoder}=await google.maps.importLibrary('geocoding');
+  const geocoder=new Geocoder();
+  const result=await geocoder.geocode({address:address.trim()});
+  const loc=result.results?.[0]?.geometry?.location;
+  if(!loc) return null;
+  return {lat:loc.lat(),lng:loc.lng()};
+}
+
+async function calculateGoogleRoute(){
+  const from=$('#fromInput').value.trim(), to=$('#destInput').value.trim();
+  if(!from||!to) throw new Error('Please enter both the start and destination first.');
+  await loadGoogleMaps();
+  const {Route}=await google.maps.importLibrary('routes');
+  const origin=draftStartCoords || from;
+  const request={origin,destination:to,travelMode:'DRIVING',routingPreference:'TRAFFIC_AWARE',fields:['distanceMeters','durationMillis','localizedValues']};
+  const {routes}=await Route.computeRoutes(request);
+  if(!routes?.length) throw new Error('Google could not find a driving route between those locations.');
+  const route=routes[0];
+  let meters=Number(route.distanceMeters)||0;
+  if(!meters && route.legs?.length) meters=route.legs.reduce((s,l)=>s+(Number(l.distanceMeters)||0),0);
+  if(!meters) throw new Error('Google returned a route but no distance.');
+  const durationText=route.localizedValues?.duration || (route.durationMillis ? `${Math.round(route.durationMillis/60000)} min` : '');
+  return {miles:round2(metersToMiles(meters)),meters,durationText,source:'google',calculatedAt:new Date().toISOString()};
+}
+
+async function useCurrentLocation(){
+  if(!navigator.geolocation){alert('Location is not available in this browser.');return;}
+  const btn=$('#useLocationBtn'); const old=btn.textContent; btn.disabled=true; btn.textContent='Locating…'; $('#fromStatus').textContent='Getting your GPS position…';
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const coords={lat:pos.coords.latitude,lng:pos.coords.longitude}; draftStartCoords=coords; routeDraft=null; renderRouteDraft();
+    const saved=nearestSavedLabel(coords);
+    if(saved){
+      $('#fromInput').value=saved.address || saved.label;
+      $('#fromStatus').textContent=`Recognised as ${saved.label} · GPS accuracy ±${Math.round(pos.coords.accuracy)} m`;
+      btn.disabled=false;btn.textContent=old;return;
+    }
+    try{
+      const address=await reverseGeocode(coords);
+      $('#fromInput').value=address;
+      $('#fromStatus').textContent=`Current address found · GPS accuracy ±${Math.round(pos.coords.accuracy)} m`;
+    }catch(err){
+      $('#fromInput').value=`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
+      $('#fromStatus').textContent='GPS position found. Add a Google API key in Settings to convert it to a street address.';
+    }
+    btn.disabled=false;btn.textContent=old;
+  },err=>{
+    btn.disabled=false;btn.textContent=old; $('#fromStatus').textContent='';
+    alert('Could not get your current location. Check Chrome location permission for Mileage Tracker.');
+  },{enableHighAccuracy:true,timeout:15000,maximumAge:15000});
+}
+
+function startJourney(){
+  const from=$('#fromInput').value.trim(), to=$('#destInput').value.trim();
+  if(!from||!to){alert('Please enter both the start and destination.');return;}
+  if(!routeDraft){alert('Please calculate the route mileage or enter it manually before starting.');return;}
+  state.active={
+    id:String(Date.now()), date:new Date().toISOString(), from, to, type:selectedType,
+    purpose:selectedType==='Work'?$('#purposeInput').value.trim():'', startOdo:$('#startOdoInput').value?Number($('#startOdoInput').value):null,
+    startTime:new Date().toISOString(), startCoords:draftStartCoords, plannedMiles:Number(routeDraft.miles), routeMeters:routeDraft.meters||null,
+    routeSource:routeDraft.source, routeDuration:routeDraft.durationText||'', routeCalculatedAt:routeDraft.calculatedAt||new Date().toISOString()
+  };
+  save(); renderActive(); showScreen('active'); openGoogleMaps(); startTimer();
+}
+
+function renderActive(){
+  if(!state.active){showScreen('home');return;}
+  const a=state.active;
+  $('#activeFrom').textContent=a.from; $('#activeTo').textContent=a.to; $('#liveMiles').textContent=Number(a.plannedMiles||0).toFixed(2);
+  $('#activeType').textContent=a.type.toUpperCase(); $('#activeType').className='tag '+(a.type==='Work'?'work':'personal'); startTimer();
+}
+function startTimer(){
+  clearInterval(timerId); if(!state.active)return;
+  const tick=()=>{const s=Math.max(0,Math.floor((Date.now()-new Date(state.active.startTime).getTime())/1000));$('#timer').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;};tick();timerId=setInterval(tick,1000);
+}
+function openGoogleMaps(){
+  if(!state.active)return;
+  const origin=state.active.startCoords ? `${state.active.startCoords.lat},${state.active.startCoords.lng}` : state.active.from;
+  const url=`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(state.active.to)}&travelmode=driving&dir_action=navigate`;
+  window.open(url,'_blank');
+}
+
+function finishJourney(){
+  if(!state.active)return;
+  const a=state.active;
+  $('#finishSummary').innerHTML=`<div><strong>${esc(a.from)}</strong> → <strong>${esc(a.to)}</strong></div><div class="journey-meta">${a.type} · planned ${Number(a.plannedMiles||0).toFixed(1)} miles${a.routeSource==='google'?' (Google route)':' (manual route)'}</div>`;
+  $('#finishMilesInput').value=Number(a.plannedMiles||0).toFixed(2); $('#finishOdoInput').value=''; $('#finishModal').classList.remove('hidden');
+}
+function saveJourney(){
+  if(!state.active)return;
+  const miles=Number($('#finishMilesInput').value); if(!Number.isFinite(miles)||miles<0){alert('Please enter a valid mileage.');return;}
+  const endOdo=$('#finishOdoInput').value?Number($('#finishOdoInput').value):null;
+  const j={...state.active,miles:round2(miles),endOdo,endTime:new Date().toISOString()};
+  state.journeys.push(j); if(endOdo!==null) state.settings.currentOdo=endOdo;
+  state.active=null; clearInterval(timerId); $('#finishModal').classList.add('hidden'); save(); showScreen('home');
+}
+
+function download(filename,content,type){const b=new Blob([content],{type}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 
 $$('nav button').forEach(b=>b.onclick=()=>showScreen(b.dataset.screen));
-$('#newJourneyBtn').onclick=()=>{selectedType='Work';$$('.choice').forEach(b=>b.classList.toggle('selected',b.dataset.type==='Work'));$('#purposeField').classList.remove('hidden');$('#fromInput').value='Current location';$('#destInput').value='';$('#purposeInput').value='';$('#startOdoInput').value=state.settings.currentOdo||'';showScreen('new')};
-$('#cancelNewBtn').onclick=()=>showScreen('home');
-$$('.choice').forEach(b=>b.onclick=()=>{selectedType=b.dataset.type;$$('.choice').forEach(x=>x.classList.toggle('selected',x===b));$('#purposeField').classList.toggle('hidden',selectedType==='Personal')});
-$('#useLocationBtn').onclick=()=>locate(pt=>{$('#fromInput').value=`Current location (${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)})`});
-$('#fromHomeBtn').onclick=()=>setStart(state.settings.homeLocation); $('#toHomeBtn').onclick=()=>setDestination(state.settings.homeLocation); $('#toWorkBtn').onclick=()=>setDestination(state.settings.workLocation);
-$('#startBtn').onclick=()=>{const from=$('#fromInput').value.trim(),to=$('#destInput').value.trim();if(!from||!to)return alert('Please enter a start and destination.');state.active={id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),from,to,type:selectedType,purpose:$('#purposeInput').value.trim(),startedAt:Date.now(),startDate:new Date().toISOString(),startOdo:$('#startOdoInput').value===''?null:parseFloat($('#startOdoInput').value),miles:0,lastPoint:null,points:0};save();showScreen('active');startGps();setTimeout(()=>$('#openMapsBtn').click(),250)};
-$('#openMapsBtn').onclick=()=>{if(!state.active)return;window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(state.active.to)}`,'_blank')};
-$('#finishBtn').onclick=()=>{if(!state.active)return;stopGps();$('#finishMilesInput').value=(state.active.miles||0).toFixed(2);$('#finishOdoInput').value=state.active.startOdo!=null?(state.active.startOdo+(state.active.miles||0)).toFixed(1):'';$('#finishSummary').innerHTML=`<strong>${esc(state.active.from)} → ${esc(state.active.to)}</strong><div class="small top-gap">${state.active.type} · GPS recorded ${(state.active.miles||0).toFixed(2)} miles</div>`;$('#finishModal').classList.remove('hidden')};
-$('#continueJourneyBtn').onclick=()=>{$('#finishModal').classList.add('hidden');startGps()};
-$('#saveJourneyBtn').onclick=()=>{const a=state.active,m=parseFloat($('#finishMilesInput').value);if(!a||!Number.isFinite(m))return alert('Please enter a valid mileage.');const endOdo=parseFloat($('#finishOdoInput').value);state.journeys.push({id:a.id,date:new Date().toISOString(),from:a.from,to:a.to,type:a.type,purpose:a.purpose,miles:m,startOdo:a.startOdo,endOdo:Number.isFinite(endOdo)?endOdo:null,startTime:a.startDate,endTime:new Date().toISOString()});if(Number.isFinite(endOdo))state.settings.currentOdo=endOdo;state.active=null;$('#finishModal').classList.add('hidden');save();showScreen('home')};
-$('#resumeBtn').onclick=()=>{showScreen('active');startGps()};
+$('#newJourneyBtn').onclick=()=>{clearNewJourney();showScreen('new')}; $('#cancelNewBtn').onclick=()=>showScreen('home'); $('#resumeBtn').onclick=()=>showScreen('active');
+$$('.choice').forEach(b=>b.onclick=()=>setChoice(b.dataset.type));
+$('#useLocationBtn').onclick=useCurrentLocation;
+$('#fromHomeBtn').onclick=()=>{if(!state.settings.homeLocation)return alert('Set Default Home Location in Settings first.');$('#fromInput').value=state.settings.homeLocation;draftStartCoords=state.settings.homeCoords;$('#fromStatus').textContent='Using saved Home location.';routeDraft=null;renderRouteDraft()};
+$('#fromWorkBtn').onclick=()=>{if(!state.settings.workLocation)return alert('Set Default Work Location in Settings first.');$('#fromInput').value=state.settings.workLocation;draftStartCoords=state.settings.workCoords;$('#fromStatus').textContent='Using saved Work location.';routeDraft=null;renderRouteDraft()};
+$('#toHomeBtn').onclick=()=>{if(!state.settings.homeLocation)return alert('Set Default Home Location in Settings first.');$('#destInput').value=state.settings.homeLocation;routeDraft=null;renderRouteDraft()};
+$('#toWorkBtn').onclick=()=>{if(!state.settings.workLocation)return alert('Set Default Work Location in Settings first.');$('#destInput').value=state.settings.workLocation;routeDraft=null;renderRouteDraft()};
+$('#fromInput').addEventListener('input',()=>{draftStartCoords=null;routeDraft=null;renderRouteDraft();$('#fromStatus').textContent=''}); $('#destInput').addEventListener('input',()=>{routeDraft=null;renderRouteDraft()});
+$('#calculateRouteBtn').onclick=async()=>{const b=$('#calculateRouteBtn'),old=b.textContent;b.disabled=true;b.textContent='CALCULATING…';try{routeDraft=await calculateGoogleRoute();renderRouteDraft()}catch(err){alert(err.message||'Could not calculate route.');}finally{b.disabled=false;b.textContent=old}};
+$('#manualRouteBtn').onclick=()=>{$('#manualRouteMilesInput').value=routeDraft?.miles||'';$('#manualRouteModal').classList.remove('hidden')};
+$('#closeManualRouteBtn').onclick=()=>$('#manualRouteModal').classList.add('hidden');
+$('#saveManualRouteBtn').onclick=()=>{const m=Number($('#manualRouteMilesInput').value);if(!Number.isFinite(m)||m<=0)return alert('Please enter a valid mileage greater than zero.');routeDraft={miles:round2(m),source:'manual',calculatedAt:new Date().toISOString()};renderRouteDraft();$('#manualRouteModal').classList.add('hidden')};
+$('#startBtn').onclick=startJourney; $('#openMapsBtn').onclick=openGoogleMaps; $('#finishBtn').onclick=finishJourney; $('#continueJourneyBtn').onclick=()=>$('#finishModal').classList.add('hidden'); $('#saveJourneyBtn').onclick=saveJourney;
 
-$('#settingsBtn').onclick=()=>{const s=state.settings;$('#driverInput').value=s.driver||'';$('#vanRegInput').value=s.vanReg||'';$('#homeLocationInput').value=s.homeLocation||'';$('#workLocationInput').value=s.workLocation||'';$('#currentOdoInput').value=s.currentOdo??'';$('#monthStartInput').value=s.monthStartOdo??'';$('#monthEndInput').value=s.monthEndOdo??'';$('#settingsModal').classList.remove('hidden')};
+$('#settingsBtn').onclick=()=>{
+  const s=state.settings; $('#driverInput').value=s.driver||'';$('#vanRegInput').value=s.vanReg||'';$('#homeLocationInput').value=s.homeLocation||'';$('#workLocationInput').value=s.workLocation||'';$('#mapsApiKeyInput').value=s.mapsApiKey||'';$('#currentOdoInput').value=s.currentOdo??'';$('#monthStartInput').value=s.monthStartOdo??'';$('#monthEndInput').value=s.monthEndOdo??'';
+  $('#mapsApiStatus').textContent=s.mapsApiKey?'Google features configured on this device.':'Google features not configured yet; manual mileage still works.'; $('#settingsModal').classList.remove('hidden');
+};
 $('#closeSettingsBtn').onclick=()=>$('#settingsModal').classList.add('hidden');
-$('#saveSettingsBtn').onclick=()=>{state.settings={...state.settings,driver:$('#driverInput').value.trim(),vanReg:$('#vanRegInput').value.trim(),homeLocation:$('#homeLocationInput').value.trim(),workLocation:$('#workLocationInput').value.trim(),currentOdo:parseFloat($('#currentOdoInput').value)||0,monthStartOdo:$('#monthStartInput').value===''?null:parseFloat($('#monthStartInput').value),monthEndOdo:$('#monthEndInput').value===''?null:parseFloat($('#monthEndInput').value)};$('#settingsModal').classList.add('hidden');save()};
-$('#resetBtn').onclick=()=>{if(confirm('Reset all test-drive data?')){localStorage.removeItem(STORAGE);location.reload()}};
+$('#saveSettingsBtn').onclick=async()=>{
+  const oldKey=state.settings.mapsApiKey||'';
+  state.settings.driver=$('#driverInput').value.trim(); state.settings.vanReg=$('#vanRegInput').value.trim().toUpperCase();
+  state.settings.homeLocation=$('#homeLocationInput').value.trim(); state.settings.workLocation=$('#workLocationInput').value.trim();
+  state.settings.mapsApiKey=$('#mapsApiKeyInput').value.trim(); state.settings.currentOdo=Number($('#currentOdoInput').value)||0;
+  state.settings.monthStartOdo=$('#monthStartInput').value===''?null:Number($('#monthStartInput').value); state.settings.monthEndOdo=$('#monthEndInput').value===''?null:Number($('#monthEndInput').value);
+  if(oldKey!==state.settings.mapsApiKey) mapsLoadPromise=null;
+  save();
+  if(state.settings.mapsApiKey){
+    $('#mapsApiStatus').textContent='Saving locations…';
+    try{
+      state.settings.homeCoords=state.settings.homeLocation?await geocodeAddress(state.settings.homeLocation):null;
+      state.settings.workCoords=state.settings.workLocation?await geocodeAddress(state.settings.workLocation):null;
+      localStorage.setItem(STORAGE,JSON.stringify(state)); $('#mapsApiStatus').textContent='Google features ready. Home/Work coordinates saved for automatic recognition.';
+    }catch(err){ $('#mapsApiStatus').textContent='Settings saved, but Google could not verify Home/Work locations. Check the API key/API restrictions.'; }
+  }
+  setTimeout(()=>$('#settingsModal').classList.add('hidden'),700); renderAll();
+};
+$('#resetBtn').onclick=()=>{if(confirm('Reset all Mileage Tracker test data on this device?')){state=clone(defaults);localStorage.removeItem(STORAGE);localStorage.removeItem(LEGACY_STORAGE);save();$('#settingsModal').classList.add('hidden');showScreen('home')}};
 
-$('#addMissedBtn').onclick=()=>{$('#missedDate').value=new Date().toISOString().slice(0,10);$('#missedFrom').value=state.settings.workLocation||state.settings.homeLocation||'';$('#missedTo').value='';$('#missedPurpose').value='';$('#missedMiles').value='';$('#missedModal').classList.remove('hidden')};
+$('#addMissedBtn').onclick=()=>{$('#missedDate').value=new Date().toISOString().slice(0,10);$('#missedFrom').value='';$('#missedTo').value='';$('#missedPurpose').value='';$('#missedMiles').value='';missedType='Work';$$('.missedType').forEach(b=>b.classList.toggle('selected',b.dataset.type==='Work'));$('#missedModal').classList.remove('hidden')};
 $$('.missedType').forEach(b=>b.onclick=()=>{missedType=b.dataset.type;$$('.missedType').forEach(x=>x.classList.toggle('selected',x===b))});
 $('#closeMissedBtn').onclick=()=>$('#missedModal').classList.add('hidden');
-$('#saveMissedBtn').onclick=()=>{const m=parseFloat($('#missedMiles').value);if(!$('#missedFrom').value.trim()||!$('#missedTo').value.trim()||!Number.isFinite(m))return alert('Please complete From, To and Distance.');const d=new Date($('#missedDate').value+'T12:00:00');state.journeys.push({id:String(Date.now()),date:d.toISOString(),from:$('#missedFrom').value.trim(),to:$('#missedTo').value.trim(),type:missedType,purpose:$('#missedPurpose').value.trim(),miles:m,startOdo:null,endOdo:null,startTime:null,endTime:null});$('#missedModal').classList.add('hidden');save()};
+$('#saveMissedBtn').onclick=()=>{const m=Number($('#missedMiles').value);if(!$('#missedDate').value||!$('#missedFrom').value.trim()||!$('#missedTo').value.trim()||!Number.isFinite(m)||m<0)return alert('Please complete Date, From, To and Distance.');const d=new Date($('#missedDate').value+'T12:00:00');state.journeys.push({id:String(Date.now()),date:d.toISOString(),from:$('#missedFrom').value.trim(),to:$('#missedTo').value.trim(),type:missedType,purpose:$('#missedPurpose').value.trim(),miles:round2(m),routeSource:'manual',startOdo:null,endOdo:null,startTime:null,endTime:null,startCoords:null});$('#missedModal').classList.add('hidden');save()};
 
 $('#previewReturnBtn').onclick=()=>{const t=totals(),rows=companyRows();$('#returnTable').innerHTML=`<tr><th colspan="3">STAGE ELECTRICS VEHICLE MILEAGE RETURN</th></tr><tr><td>Employee</td><td colspan="2">${esc(state.settings.driver||'—')}</td></tr><tr><td>Register No</td><td colspan="2">${esc(state.settings.vanReg||'—')}</td></tr><tr><th>Date</th><th>Details of journey</th><th>Business miles</th></tr>${rows.map(r=>`<tr><td>${new Date(r.date).toLocaleDateString()}</td><td>${esc(r.from)} → ${esc(r.to)}${r.purpose?' · '+esc(r.purpose):''}</td><td>${(+r.miles).toFixed(1)}</td></tr>`).join('')}<tr><td colspan="2"><strong>Total business</strong></td><td><strong>${t.w.toFixed(1)}</strong></td></tr><tr><td colspan="2"><strong>Private miles</strong></td><td><strong>${t.p.toFixed(1)}</strong></td></tr>`;$('#returnModal').classList.remove('hidden')};
 $('#closeReturnBtn').onclick=()=>$('#returnModal').classList.add('hidden');
-$('#exportCsvBtn').onclick=()=>{const rows=[['Date','From','To','Type','Purpose','Miles','Start Odometer','End Odometer'],...monthJourneys().map(j=>[new Date(j.date).toLocaleDateString(),j.from,j.to,j.type,j.purpose,j.miles,j.startOdo??'',j.endOdo??''])],csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');download(`Mileage_${currentMonthKey()}.csv`,csv,'text/csv')};
+$('#exportCsvBtn').onclick=()=>{const rows=[['Date','From','To','Type','Purpose','Miles','Route Source','Start Latitude','Start Longitude','Start Odometer','End Odometer'],...monthJourneys().map(j=>[new Date(j.date).toLocaleDateString(),j.from,j.to,j.type,j.purpose,j.miles,j.routeSource||'',j.startCoords?.lat??'',j.startCoords?.lng??'',j.startOdo??'',j.endOdo??''])],csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');download(`Mileage_${currentMonthKey()}.csv`,csv,'text/csv')};
 $('#exportXlsBtn').onclick=()=>{const t=totals(),rows=companyRows(),html=`<html><head><meta charset="utf-8"></head><body><table border="1"><tr><th colspan="4">STAGE ELECTRICS VEHICLE MILEAGE RETURN</th></tr><tr><td>Month</td><td>${new Date().toLocaleDateString(undefined,{month:'long',year:'numeric'})}</td><td>Employee</td><td>${esc(state.settings.driver)}</td></tr><tr><td>Register No</td><td>${esc(state.settings.vanReg)}</td><td>Start Odo</td><td>${state.settings.monthStartOdo??''}</td></tr><tr><td>End Odo</td><td>${state.settings.monthEndOdo??''}</td><td></td><td></td></tr><tr><th>Date</th><th colspan="2">Details of journey</th><th>Business miles</th></tr>${rows.map(r=>`<tr><td>${new Date(r.date).toLocaleDateString()}</td><td colspan="2">${esc(r.from)} → ${esc(r.to)}${r.purpose?' · '+esc(r.purpose):''}</td><td>${(+r.miles).toFixed(1)}</td></tr>`).join('')}<tr><td colspan="3"><b>Total business</b></td><td><b>${t.w.toFixed(1)}</b></td></tr><tr><td colspan="3"><b>Private miles</b></td><td><b>${t.p.toFixed(1)}</b></td></tr></table></body></html>`;download(`Company_Mileage_Return_${currentMonthKey()}.xls`,html,'application/vnd.ms-excel')};
 
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;$('#installBtn').classList.remove('hidden');$('#installHint').classList.remove('hidden');$('#installHint').textContent='Mileage Tracker is ready to install on this device.'});
 $('#installBtn').onclick=async()=>{if(!deferredInstallPrompt)return;deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;$('#installBtn').classList.add('hidden');$('#installHint').classList.add('hidden')};
 window.addEventListener('appinstalled',()=>{$('#installBtn').classList.add('hidden');$('#installHint').classList.add('hidden')});
-if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
+$('#reloadBtn').onclick=()=>location.reload();
+if('serviceWorker' in navigator){
+  window.addEventListener('load',async()=>{
+    try{
+      const reg=await navigator.serviceWorker.register('./sw.js');
+      if(reg.waiting) $('#updateHint').classList.remove('hidden');
+      reg.addEventListener('updatefound',()=>{const nw=reg.installing;if(!nw)return;nw.addEventListener('statechange',()=>{if(nw.state==='installed'&&navigator.serviceWorker.controller)$('#updateHint').classList.remove('hidden')})});
+    }catch(_){ }
+  });
+}
 
-renderAll();if(state.active){renderActive();startGps()}
+renderAll(); if(state.active){renderActive();}
