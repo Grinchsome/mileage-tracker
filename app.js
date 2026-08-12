@@ -1,6 +1,6 @@
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-const STORAGE = 'mileageTrackerTestDriveV2';
-const LEGACY_STORAGE = 'mileageTrackerTestDriveV1';
+const STORAGE = 'mileageTrackerTestDriveV3';
+const LEGACY_STORAGES = ['mileageTrackerTestDriveV2','mileageTrackerTestDriveV1'];
 const defaults = {
   settings: {
     driver: '', vanReg: 'VN22 XBC', homeLocation: '', workLocation: 'Stage Electrics, Bristol',
@@ -13,7 +13,12 @@ const defaults = {
 function clone(v){ return JSON.parse(JSON.stringify(v)); }
 function loadState(){
   let raw = localStorage.getItem(STORAGE);
-  if (!raw) raw = localStorage.getItem(LEGACY_STORAGE);
+  if (!raw) {
+    for (const key of LEGACY_STORAGES) {
+      raw = localStorage.getItem(key);
+      if (raw) break;
+    }
+  }
   let parsed = null;
   try { parsed = raw ? JSON.parse(raw) : null; } catch (_) {}
   const s = parsed || clone(defaults);
@@ -61,7 +66,7 @@ function renderHistory(){
   const list=$('#historyList');
   const rows=[...state.journeys].sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!rows.length){list.innerHTML='<div class="center subtle">No journeys recorded yet.</div>';return;}
-  list.innerHTML=rows.map(j=>`<div class="journey"><div class="row space"><div><div class="journey-title">${esc(j.from)} → ${esc(j.to)}</div><div class="journey-meta">${new Date(j.date).toLocaleString()} · ${j.routeSource==='google'?'Google route':j.routeSource==='manual'?'Manual route':'Recorded'}${j.purpose?' · '+esc(j.purpose):''}</div></div><div class="miles">${Number(j.miles).toFixed(1)} mi</div></div><div class="top-gap-small"><span class="tag ${j.type==='Work'?'work':'personal'}">${esc(j.type.toUpperCase())}</span></div></div>`).join('');
+  list.innerHTML=rows.map(j=>`<div class="journey"><div class="row space"><div><div class="journey-title">${esc(j.from)} → ${esc(j.to)}</div><div class="journey-meta">${new Date(j.date).toLocaleString()} · ${j.routeSource==='google'?'Google route':j.routeSource==='manual'?'Manual route':'Recorded'}${j.purpose?' · '+esc(j.purpose):''}${j.adjustmentReason?' · '+esc(j.adjustmentReason):''}${Number(j.mileageAdjustment)?` · ${Number(j.mileageAdjustment)>0?'+':''}${Number(j.mileageAdjustment).toFixed(1)} mi vs planned`:''}</div></div><div class="miles">${Number(j.miles).toFixed(1)} mi</div></div><div class="top-gap-small"><span class="tag ${j.type==='Work'?'work':'personal'}">${esc(j.type.toUpperCase())}</span></div></div>`).join('');
 }
 
 function renderMonthly(){
@@ -158,7 +163,7 @@ async function calculateGoogleRoute(){
   await loadGoogleMaps();
   const {Route}=await google.maps.importLibrary('routes');
   const origin=draftStartCoords || from;
-  const request={origin,destination:to,travelMode:'DRIVING',routingPreference:'TRAFFIC_AWARE',fields:['distanceMeters','durationMillis','localizedValues']};
+  const request={origin,destination:to,travelMode:'DRIVING',routingPreference:'TRAFFIC_AWARE_OPTIMAL',fields:['distanceMeters','durationMillis','localizedValues']};
   const {routes}=await Route.computeRoutes(request);
   if(!routes?.length) throw new Error('Google could not find a driving route between those locations.');
   const route=routes[0];
@@ -166,7 +171,7 @@ async function calculateGoogleRoute(){
   if(!meters && route.legs?.length) meters=route.legs.reduce((s,l)=>s+(Number(l.distanceMeters)||0),0);
   if(!meters) throw new Error('Google returned a route but no distance.');
   const durationText=route.localizedValues?.duration || (route.durationMillis ? `${Math.round(route.durationMillis/60000)} min` : '');
-  return {miles:round2(metersToMiles(meters)),meters,durationText,source:'google',calculatedAt:new Date().toISOString()};
+  return {miles:round2(metersToMiles(meters)),meters,durationText,source:'google',routingPreference:'TRAFFIC_AWARE_OPTIMAL',calculatedAt:new Date().toISOString()};
 }
 
 async function useCurrentLocation(){
@@ -225,18 +230,48 @@ function openGoogleMaps(){
   window.open(url,'_blank');
 }
 
+function updateFinishOdometerPreview(){
+  if(!state.active)return;
+  const miles=Number($('#finishMilesInput').value);
+  const startOdo=Number.isFinite(Number(state.active.startOdo)) ? Number(state.active.startOdo) : Number(state.settings.currentOdo||0);
+  const entered=$('#finishOdoInput').value.trim();
+  if(entered){
+    const endOdo=Number(entered);
+    if(Number.isFinite(endOdo) && endOdo>=startOdo){
+      const odoMiles=round2(endOdo-startOdo);
+      $('#odoPreview').innerHTML=`Ending odometer gives <strong>${odoMiles.toFixed(1)} miles</strong>. <button class="inline-btn" id="useOdoMilesBtn">Use this as actual mileage</button>`;
+      const btn=$('#useOdoMilesBtn'); if(btn) btn.onclick=()=>{$('#finishMilesInput').value=odoMiles.toFixed(2);updateFinishOdometerPreview();};
+      return;
+    }
+  }
+  const autoEnd=startOdo+(Number.isFinite(miles)?miles:0);
+  $('#odoPreview').innerHTML=`If you do not enter the van reading, the app will automatically advance the odometer to <strong>${autoEnd.toFixed(1)}</strong>.`;
+}
+
 function finishJourney(){
   if(!state.active)return;
   const a=state.active;
-  $('#finishSummary').innerHTML=`<div><strong>${esc(a.from)}</strong> → <strong>${esc(a.to)}</strong></div><div class="journey-meta">${a.type} · planned ${Number(a.plannedMiles||0).toFixed(1)} miles${a.routeSource==='google'?' (Google route)':' (manual route)'}</div>`;
-  $('#finishMilesInput').value=Number(a.plannedMiles||0).toFixed(2); $('#finishOdoInput').value=''; $('#finishModal').classList.remove('hidden');
+  const planned=Number(a.plannedMiles||0);
+  $('#finishSummary').innerHTML=`<div><strong>${esc(a.from)}</strong> → <strong>${esc(a.to)}</strong></div><div class="journey-meta">${a.type}${a.routeSource==='google'?' · Google traffic-aware route':' · manual route'}</div><div class="planned-actual"><div><span>PLANNED</span><strong>${planned.toFixed(1)} mi</strong></div><div><span>ACTUAL</span><strong id="actualPreviewMiles">${planned.toFixed(1)} mi</strong></div></div>`;
+  $('#finishMilesInput').value=planned.toFixed(2);
+  $('#finishOdoInput').value='';
+  $('#adjustmentReasonInput').value='';
+  $('#detourQuickBtn').classList.remove('selected-adjustment');
+  $('#finishModal').classList.remove('hidden');
+  updateFinishOdometerPreview();
 }
 function saveJourney(){
   if(!state.active)return;
-  const miles=Number($('#finishMilesInput').value); if(!Number.isFinite(miles)||miles<0){alert('Please enter a valid mileage.');return;}
-  const endOdo=$('#finishOdoInput').value?Number($('#finishOdoInput').value):null;
-  const j={...state.active,miles:round2(miles),endOdo,endTime:new Date().toISOString()};
-  state.journeys.push(j); if(endOdo!==null) state.settings.currentOdo=endOdo;
+  const miles=Number($('#finishMilesInput').value); if(!Number.isFinite(miles)||miles<0){alert('Please enter a valid actual mileage.');return;}
+  const planned=Number(state.active.plannedMiles||0);
+  const startOdo=Number.isFinite(Number(state.active.startOdo)) ? Number(state.active.startOdo) : Number(state.settings.currentOdo||0);
+  const enteredEnd=$('#finishOdoInput').value.trim();
+  const endOdo=enteredEnd ? Number(enteredEnd) : round2(startOdo+miles);
+  if(!Number.isFinite(endOdo)||endOdo<startOdo){alert('Please check the ending odometer reading.');return;}
+  const reason=$('#adjustmentReasonInput').value.trim();
+  const j={...state.active,miles:round2(miles),plannedMiles:round2(planned),mileageAdjustment:round2(miles-planned),adjustmentReason:reason,endOdo:round2(endOdo),endTime:new Date().toISOString()};
+  state.journeys.push(j);
+  state.settings.currentOdo=round2(endOdo);
   state.active=null; clearInterval(timerId); $('#finishModal').classList.add('hidden'); save(); showScreen('home');
 }
 
@@ -256,6 +291,10 @@ $('#manualRouteBtn').onclick=()=>{$('#manualRouteMilesInput').value=routeDraft?.
 $('#closeManualRouteBtn').onclick=()=>$('#manualRouteModal').classList.add('hidden');
 $('#saveManualRouteBtn').onclick=()=>{const m=Number($('#manualRouteMilesInput').value);if(!Number.isFinite(m)||m<=0)return alert('Please enter a valid mileage greater than zero.');routeDraft={miles:round2(m),source:'manual',calculatedAt:new Date().toISOString()};renderRouteDraft();$('#manualRouteModal').classList.add('hidden')};
 $('#startBtn').onclick=startJourney; $('#openMapsBtn').onclick=openGoogleMaps; $('#finishBtn').onclick=finishJourney; $('#continueJourneyBtn').onclick=()=>$('#finishModal').classList.add('hidden'); $('#saveJourneyBtn').onclick=saveJourney;
+$('#finishMilesInput').addEventListener('input',()=>{const v=Number($('#finishMilesInput').value);if(Number.isFinite(v))$('#actualPreviewMiles').textContent=`${v.toFixed(1)} mi`;updateFinishOdometerPreview();});
+$('#finishOdoInput').addEventListener('input',updateFinishOdometerPreview);
+$('#detourQuickBtn').onclick=()=>{const input=$('#adjustmentReasonInput');if(!input.value.trim())input.value='Detour / road closure';$('#detourQuickBtn').classList.add('selected-adjustment');input.focus();};
+$('#usePlannedBtn').onclick=()=>{if(!state.active)return;$('#finishMilesInput').value=Number(state.active.plannedMiles||0).toFixed(2);$('#actualPreviewMiles').textContent=`${Number(state.active.plannedMiles||0).toFixed(1)} mi`;updateFinishOdometerPreview();};
 
 $('#settingsBtn').onclick=()=>{
   const s=state.settings; $('#driverInput').value=s.driver||'';$('#vanRegInput').value=s.vanReg||'';$('#homeLocationInput').value=s.homeLocation||'';$('#workLocationInput').value=s.workLocation||'';$('#mapsApiKeyInput').value=s.mapsApiKey||'';$('#currentOdoInput').value=s.currentOdo??'';$('#monthStartInput').value=s.monthStartOdo??'';$('#monthEndInput').value=s.monthEndOdo??'';
@@ -280,7 +319,7 @@ $('#saveSettingsBtn').onclick=async()=>{
   }
   setTimeout(()=>$('#settingsModal').classList.add('hidden'),700); renderAll();
 };
-$('#resetBtn').onclick=()=>{if(confirm('Reset all Mileage Tracker test data on this device?')){state=clone(defaults);localStorage.removeItem(STORAGE);localStorage.removeItem(LEGACY_STORAGE);save();$('#settingsModal').classList.add('hidden');showScreen('home')}};
+$('#resetBtn').onclick=()=>{if(confirm('Reset all Mileage Tracker test data on this device?')){state=clone(defaults);localStorage.removeItem(STORAGE);LEGACY_STORAGES.forEach(k=>localStorage.removeItem(k));save();$('#settingsModal').classList.add('hidden');showScreen('home')}};
 
 $('#addMissedBtn').onclick=()=>{$('#missedDate').value=new Date().toISOString().slice(0,10);$('#missedFrom').value='';$('#missedTo').value='';$('#missedPurpose').value='';$('#missedMiles').value='';missedType='Work';$$('.missedType').forEach(b=>b.classList.toggle('selected',b.dataset.type==='Work'));$('#missedModal').classList.remove('hidden')};
 $$('.missedType').forEach(b=>b.onclick=()=>{missedType=b.dataset.type;$$('.missedType').forEach(x=>x.classList.toggle('selected',x===b))});
@@ -289,7 +328,7 @@ $('#saveMissedBtn').onclick=()=>{const m=Number($('#missedMiles').value);if(!$('
 
 $('#previewReturnBtn').onclick=()=>{const t=totals(),rows=companyRows();$('#returnTable').innerHTML=`<tr><th colspan="3">STAGE ELECTRICS VEHICLE MILEAGE RETURN</th></tr><tr><td>Employee</td><td colspan="2">${esc(state.settings.driver||'—')}</td></tr><tr><td>Register No</td><td colspan="2">${esc(state.settings.vanReg||'—')}</td></tr><tr><th>Date</th><th>Details of journey</th><th>Business miles</th></tr>${rows.map(r=>`<tr><td>${new Date(r.date).toLocaleDateString()}</td><td>${esc(r.from)} → ${esc(r.to)}${r.purpose?' · '+esc(r.purpose):''}</td><td>${(+r.miles).toFixed(1)}</td></tr>`).join('')}<tr><td colspan="2"><strong>Total business</strong></td><td><strong>${t.w.toFixed(1)}</strong></td></tr><tr><td colspan="2"><strong>Private miles</strong></td><td><strong>${t.p.toFixed(1)}</strong></td></tr>`;$('#returnModal').classList.remove('hidden')};
 $('#closeReturnBtn').onclick=()=>$('#returnModal').classList.add('hidden');
-$('#exportCsvBtn').onclick=()=>{const rows=[['Date','From','To','Type','Purpose','Miles','Route Source','Start Latitude','Start Longitude','Start Odometer','End Odometer'],...monthJourneys().map(j=>[new Date(j.date).toLocaleDateString(),j.from,j.to,j.type,j.purpose,j.miles,j.routeSource||'',j.startCoords?.lat??'',j.startCoords?.lng??'',j.startOdo??'',j.endOdo??''])],csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');download(`Mileage_${currentMonthKey()}.csv`,csv,'text/csv')};
+$('#exportCsvBtn').onclick=()=>{const rows=[['Date','From','To','Type','Purpose','Planned Miles','Actual Miles','Adjustment','Adjustment Reason','Route Source','Start Latitude','Start Longitude','Start Odometer','End Odometer'],...monthJourneys().map(j=>[new Date(j.date).toLocaleDateString(),j.from,j.to,j.type,j.purpose,j.plannedMiles??j.miles,j.miles,j.mileageAdjustment??0,j.adjustmentReason||'',j.routeSource||'',j.startCoords?.lat??'',j.startCoords?.lng??'',j.startOdo??'',j.endOdo??''])],csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');download(`Mileage_${currentMonthKey()}.csv`,csv,'text/csv')};
 $('#exportXlsBtn').onclick=()=>{const t=totals(),rows=companyRows(),html=`<html><head><meta charset="utf-8"></head><body><table border="1"><tr><th colspan="4">STAGE ELECTRICS VEHICLE MILEAGE RETURN</th></tr><tr><td>Month</td><td>${new Date().toLocaleDateString(undefined,{month:'long',year:'numeric'})}</td><td>Employee</td><td>${esc(state.settings.driver)}</td></tr><tr><td>Register No</td><td>${esc(state.settings.vanReg)}</td><td>Start Odo</td><td>${state.settings.monthStartOdo??''}</td></tr><tr><td>End Odo</td><td>${state.settings.monthEndOdo??''}</td><td></td><td></td></tr><tr><th>Date</th><th colspan="2">Details of journey</th><th>Business miles</th></tr>${rows.map(r=>`<tr><td>${new Date(r.date).toLocaleDateString()}</td><td colspan="2">${esc(r.from)} → ${esc(r.to)}${r.purpose?' · '+esc(r.purpose):''}</td><td>${(+r.miles).toFixed(1)}</td></tr>`).join('')}<tr><td colspan="3"><b>Total business</b></td><td><b>${t.w.toFixed(1)}</b></td></tr><tr><td colspan="3"><b>Private miles</b></td><td><b>${t.p.toFixed(1)}</b></td></tr></table></body></html>`;download(`Company_Mileage_Return_${currentMonthKey()}.xls`,html,'application/vnd.ms-excel')};
 
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstallPrompt=e;$('#installBtn').classList.remove('hidden');$('#installHint').classList.remove('hidden');$('#installHint').textContent='Mileage Tracker is ready to install on this device.'});

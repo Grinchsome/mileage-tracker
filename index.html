@@ -18,7 +18,7 @@
   <header>
     <div>
       <div class="brand">Mileage Tracker</div>
-      <div class="subtle">Test Drive v2</div>
+      <div class="subtle">Test Drive v3</div>
     </div>
     <div class="header-actions">
       <button id="installBtn" class="mini primary hidden">Install</button>
@@ -95,7 +95,7 @@
           <div class="small route-gap">To</div><strong id="activeTo">—</strong>
           <div class="route-gap"><span id="activeType" class="tag work">WORK</span></div>
         </div>
-        <div class="notice ok">Version 2 saves the planned road-route distance before Google Maps opens. It no longer relies on browser GPS continuing in the background.</div>
+        <div class="notice ok">Version 3 uses Google traffic-aware routing for the planned distance. At the end you can confirm the actual mileage and record any detour.</div>
         <button class="btn outline" id="openMapsBtn">OPEN IN GOOGLE MAPS</button>
         <button class="btn danger" id="finishBtn">END JOURNEY</button>
       </div>
@@ -159,9 +159,15 @@
 <div id="finishModal" class="modal hidden"><div class="sheet">
   <h3>Journey Complete</h3>
   <div id="finishSummary" class="card"></div>
-  <div class="field"><label>Distance to save (miles)</label><input id="finishMilesInput" type="number" inputmode="decimal" step="0.01" /></div>
-  <div class="small finish-help">This starts with the planned route mileage. Change it if a diversion or detour made the actual journey different.</div>
-  <div class="field top-gap"><label>Ending odometer (optional)</label><input id="finishOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
+  <div class="grid2 compact-actions">
+    <button class="btn outline" id="usePlannedBtn">USE PLANNED MILES</button>
+    <button class="btn outline" id="detourQuickBtn">↪ DETOUR / CLOSURE</button>
+  </div>
+  <div class="field top-gap"><label>Actual mileage travelled</label><input id="finishMilesInput" type="number" inputmode="decimal" step="0.01" /></div>
+  <div class="small finish-help">If the route changed because of a closure, diversion or another reason, enter the real mileage here before saving.</div>
+  <div class="field"><label>Adjustment reason (optional)</label><input id="adjustmentReasonInput" placeholder="e.g. Detour / road closure" /></div>
+  <div class="field"><label>Actual ending odometer (optional)</label><input id="finishOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
+  <div id="odoPreview" class="notice"></div>
   <button class="btn primary" id="saveJourneyBtn">FINISH & SAVE</button>
   <button class="btn outline" id="continueJourneyBtn">Continue journey</button>
 </div></div>

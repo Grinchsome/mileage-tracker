@@ -15,7 +15,7 @@ IMPORTANT - GOOGLE MAPS SETUP
 The app files DO NOT contain your Google API key. This is intentional because a GitHub Pages repository may be public.
 
 On your phone:
-1. Update the GitHub repository by replacing index.html, app.js, styles.css, manifest.webmanifest and sw.js with the Version 2 files. Keep the icons folder.
+1. Update the GitHub repository by replacing index.html, app.js, styles.css, manifest.webmanifest and sw.js with the Version 3 files. Keep the icons folder.
 2. Wait for GitHub Pages to deploy (normally a minute or two).
 3. Open the installed Mileage Tracker. If it still looks like v1, fully close it and reopen it, or open the GitHub Pages URL in Chrome and refresh. V2 includes a new service-worker cache.
 4. Open Settings.
@@ -54,3 +54,19 @@ For the first V2 test:
 PRIVACY
 -------
 Journey data and the Google API key are stored in local browser storage on the device. Clearing Chrome site data or resetting the app removes them. Export records regularly while testing.
+
+
+VERSION 3 CHANGES
+-----------------
+- Saved journey mileage now automatically advances Current Odometer.
+- If you enter an actual ending odometer, that reading overrides the automatic figure.
+- The finish screen clearly compares planned and actual mileage.
+- Detours/road closures can be recorded with an adjustment reason.
+- Google route calculation now requests TRAFFIC_AWARE_OPTIMAL routing.
+- Existing Version 2 and Version 1 browser data are migrated automatically.
+
+UPDATE ON GITHUB PAGES
+----------------------
+Upload/replace index.html, app.js, styles.css, sw.js, manifest.webmanifest and README.txt.
+The icons have not changed, but it is safe to upload them again.
+After GitHub Pages deploys, close the installed app fully and reopen it. If Version 3 is not shown under the title, open the GitHub Pages URL in Chrome and refresh once, then reopen the installed app.

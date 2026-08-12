@@ -1,7 +1,7 @@
 {
   "name": "Mileage Tracker",
   "short_name": "Mileage",
-  "description": "Track work and personal mileage and prepare monthly mileage returns.",
+  "description": "Track work and personal mileage with traffic-aware routes, odometer updates and monthly mileage returns.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
