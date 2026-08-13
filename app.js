@@ -382,12 +382,28 @@ function makeZip(files){
 function b64Bytes(s){const bin=atob(s),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;}
 function templateFiles(){
   if(!window.COMPANY_TEMPLATE_FILES) throw new Error('The company Excel template is missing from this version.');
-  return Object.entries(window.COMPANY_TEMPLATE_FILES).map(([name,b64])=>({name,data:b64Bytes(b64)}));
+  const dec=new TextDecoder(), enc=new TextEncoder();
+  const files=Object.entries(window.COMPANY_TEMPLATE_FILES)
+    .filter(([name])=>name!=='xl/calcChain.xml')
+    .map(([name,b64])=>({name,data:b64Bytes(b64)}));
+  const contentTypes=files.find(f=>f.name==='[Content_Types].xml');
+  if(contentTypes){
+    let xml=dec.decode(contentTypes.data);
+    xml=xml.replace(/<Override\s+PartName="\/xl\/calcChain\.xml"[^>]*\/>/g,'');
+    contentTypes.data=enc.encode(xml);
+  }
+  const rels=files.find(f=>f.name==='xl/_rels/workbook.xml.rels');
+  if(rels){
+    let xml=dec.decode(rels.data);
+    xml=xml.replace(/<Relationship\s+[^>]*Type="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships\/calcChain"[^>]*\/>/g,'');
+    rels.data=enc.encode(xml);
+  }
+  return files;
 }
 function replaceCell(xml,ref,value,{formula=null,cached=null}={}){
   const re=new RegExp(`<c\\s+([^>]*\\br="${ref}"[^>]*?)(?:\\s*/>|>([\\s\\S]*?)<\\/c>)`);
   const m=xml.match(re); if(!m) throw new Error(`Template cell ${ref} was not found.`);
-  const attrs=m[1].replace(/\\s+t="[^"]*"/g,'');
+  const attrs=m[1].replace(/\s+t="[^"]*"/g,'').replace(/\s*\/$/,'').trim();
   let cell='';
   if(formula!==null){cell=`<c ${attrs}><f>${xmlEsc(formula)}</f><v>${Number.isFinite(Number(cached))?Number(cached):0}</v></c>`;}
   else if(value===null||value===undefined||value===''){cell=`<c ${attrs}/>`;}
