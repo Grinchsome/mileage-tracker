@@ -19,3 +19,11 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(520px,
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.grid3 .btn{font-size:12px;padding:12px 6px}.location-status{min-height:18px;margin:-7px 0 8px 2px}.soft-card{background:#f8fbff}.top-gap-small{margin-top:8px}.tag.neutral{background:#eef1f5;color:#586579}.tag.ok-tag{background:#dcf5e7;color:#12763c}.finish-help{margin-top:-8px;margin-bottom:12px}
 
 .planned-actual{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.planned-actual>div{background:#f7f9fc;border-radius:10px;padding:10px;text-align:center}.planned-actual span{display:block;font-size:10px;color:var(--muted);font-weight:800}.planned-actual strong{display:block;margin-top:3px;font-size:18px}.selected-adjustment{background:#fff5df!important;border-color:#d9b45c!important;color:#7f5a00!important}#odoPreview{margin-top:-4px}
+
+.btn.download-success,
+.btn.download-success:disabled {
+  background: #1f8f55;
+  border-color: #1f8f55;
+  color: #fff;
+  opacity: 1;
+}

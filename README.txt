@@ -1,20 +1,24 @@
-Mileage Tracker - Test Drive V4
+Mileage Tracker - Test Drive V5
 
-WHAT CHANGED IN V4
+WHAT CHANGED IN V5
 ------------------
-- Company export is now a real .xlsx workbook.
-- The workbook follows the supplied Stage Electrics Vehicle Mileage Return layout.
-- Driver name, vehicle registration, month, odometer readings and business journeys are filled automatically.
-- Business mileage is populated from the app's journey records.
-- Private mileage is calculated as total van mileage less total business mileage, matching the company declaration logic.
-- Signature / H.O.D. / Management Team fields remain blank for normal sign-off.
-- If more than 31 business journeys exist in the month, continuation sheets are added.
-- Existing V3 data/settings/API key migrate automatically on the same device/browser.
+- Company .XLSX export now starts from the exact company workbook template supplied for this project, preserving its original layout, colours, borders, formulas, header, signature area and print setup.
+- Driver name, vehicle registration, month, monthly odometer readings and business journeys are inserted into the existing template cells.
+- The company form continues to calculate total business mileage and private mileage using the original declaration logic.
+- Export CSV and Export Company .XLSX buttons now show PREPARING... and DOWNLOADED with a visible success state, and are disabled while the download is being prepared to prevent accidental double downloads.
+- Reset journey data now clears journey/test records while keeping driver/van settings, Home and Work locations, Google API key and current odometer. The current odometer becomes the new monthly starting point.
+- Existing V4 data/settings/API key migrate automatically on the same device/browser.
 
-SHARING THE APP
----------------
-The Google Maps API key is stored in localStorage on each device. Sharing the GitHub Pages URL does not share your key automatically. Each colleague can use the app without Google features until a key is entered on that device. If colleagues enter your key, their Google Maps requests are charged/count against your Google Cloud project.
+COMPANY EXPORT
+--------------
+The supplied company form contains 31 business-journey lines. V5 preserves that exact form. If a month contains more than 31 business journeys, V5 will warn rather than silently omit them.
 
 UPDATE ON GITHUB
 ----------------
-Upload these V4 files over the files already in your mileage-tracker repository. Wait for GitHub Pages to deploy, then close and reopen the installed app. The header should show Test Drive v4.
+Upload all V5 files over the files already in your mileage-tracker repository. Wait for GitHub Pages to deploy, then fully close and reopen the installed app. The header should show Test Drive v5.
+
+If the installed app still shows V4, open the GitHub Pages address in Chrome, refresh it once, then reopen the installed app.
+
+SHARING THE APP
+---------------
+The Google Maps API key remains stored locally on each device. Sharing the GitHub Pages URL does not automatically share your key.

@@ -1,6 +1,6 @@
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-const STORAGE = 'mileageTrackerTestDriveV4';
-const LEGACY_STORAGES = ['mileageTrackerTestDriveV3','mileageTrackerTestDriveV2','mileageTrackerTestDriveV1'];
+const STORAGE = 'mileageTrackerTestDriveV5';
+const LEGACY_STORAGES = ['mileageTrackerTestDriveV4','mileageTrackerTestDriveV3','mileageTrackerTestDriveV2','mileageTrackerTestDriveV1'];
 const defaults = {
   settings: {
     driver: '', vanReg: 'VN22 XBC', homeLocation: '', workLocation: 'Stage Electrics, Bristol',
@@ -319,7 +319,19 @@ $('#saveSettingsBtn').onclick=async()=>{
   }
   setTimeout(()=>$('#settingsModal').classList.add('hidden'),700); renderAll();
 };
-$('#resetBtn').onclick=()=>{if(confirm('Reset all Mileage Tracker test data on this device?')){state=clone(defaults);localStorage.removeItem(STORAGE);LEGACY_STORAGES.forEach(k=>localStorage.removeItem(k));save();$('#settingsModal').classList.add('hidden');showScreen('home')}};
+$('#resetBtn').onclick=()=>{
+  if(!confirm('Clear all journey/test data on this device?\n\nYour driver, van, Home/Work locations, Google API key and current odometer will be kept. This cannot be undone.')) return;
+  const kept={...state.settings};
+  kept.monthStartOdo=Number.isFinite(Number(kept.currentOdo))?Number(kept.currentOdo):null;
+  kept.monthEndOdo=null;
+  state={settings:kept,journeys:[],active:null};
+  LEGACY_STORAGES.forEach(k=>localStorage.removeItem(k));
+  localStorage.setItem(STORAGE,JSON.stringify(state));
+  renderAll();
+  $('#settingsModal').classList.add('hidden');
+  showScreen('home');
+  setTimeout(()=>alert('Journey data cleared. Your settings and current odometer have been kept.'),100);
+};
 
 $('#addMissedBtn').onclick=()=>{$('#missedDate').value=new Date().toISOString().slice(0,10);$('#missedFrom').value='';$('#missedTo').value='';$('#missedPurpose').value='';$('#missedMiles').value='';missedType='Work';$$('.missedType').forEach(b=>b.classList.toggle('selected',b.dataset.type==='Work'));$('#missedModal').classList.remove('hidden')};
 $$('.missedType').forEach(b=>b.onclick=()=>{missedType=b.dataset.type;$$('.missedType').forEach(x=>x.classList.toggle('selected',x===b))});
@@ -328,76 +340,108 @@ $('#saveMissedBtn').onclick=()=>{const m=Number($('#missedMiles').value);if(!$('
 
 $('#previewReturnBtn').onclick=()=>{const t=totals(),rows=companyRows();$('#returnTable').innerHTML=`<tr><th colspan="3">STAGE ELECTRICS VEHICLE MILEAGE RETURN</th></tr><tr><td>Employee</td><td colspan="2">${esc(state.settings.driver||'—')}</td></tr><tr><td>Register No</td><td colspan="2">${esc(state.settings.vanReg||'—')}</td></tr><tr><th>Date</th><th>Details of journey</th><th>Business miles</th></tr>${rows.map(r=>`<tr><td>${new Date(r.date).toLocaleDateString()}</td><td>${esc(r.from)} → ${esc(r.to)}${r.purpose?' · '+esc(r.purpose):''}</td><td>${(+r.miles).toFixed(1)}</td></tr>`).join('')}<tr><td colspan="2"><strong>Total business</strong></td><td><strong>${t.w.toFixed(1)}</strong></td></tr><tr><td colspan="2"><strong>Private miles</strong></td><td><strong>${t.p.toFixed(1)}</strong></td></tr>`;$('#returnModal').classList.remove('hidden')};
 $('#closeReturnBtn').onclick=()=>$('#returnModal').classList.add('hidden');
-$('#exportCsvBtn').onclick=()=>{const rows=[['Date','From','To','Type','Purpose','Planned Miles','Actual Miles','Adjustment','Adjustment Reason','Route Source','Start Latitude','Start Longitude','Start Odometer','End Odometer'],...monthJourneys().map(j=>[new Date(j.date).toLocaleDateString(),j.from,j.to,j.type,j.purpose,j.plannedMiles??j.miles,j.miles,j.mileageAdjustment??0,j.adjustmentReason||'',j.routeSource||'',j.startCoords?.lat??'',j.startCoords?.lng??'',j.startOdo??'',j.endOdo??''])],csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');download(`Mileage_${currentMonthKey()}.csv`,csv,'text/csv')};
-// --- Version 4: native XLSX company mileage return ---
+function setExportFeedback(button, workingText, successText, action){
+  if(button.disabled) return;
+  const original=button.textContent;
+  button.disabled=true;
+  button.classList.remove('download-success');
+  button.textContent=workingText;
+  Promise.resolve().then(action).then(()=>{
+    button.textContent=successText;
+    button.classList.add('download-success');
+    setTimeout(()=>{button.textContent=original;button.classList.remove('download-success');button.disabled=false;},2200);
+  }).catch(err=>{
+    console.error(err);
+    button.textContent='TRY AGAIN';
+    setTimeout(()=>{button.textContent=original;button.disabled=false;},1800);
+    alert(err.message||'The export could not be created.');
+  });
+}
+
+$('#exportCsvBtn').onclick=()=>setExportFeedback($('#exportCsvBtn'),'PREPARING…','DOWNLOADED ✓',()=>{
+  const rows=[['Date','From','To','Type','Purpose','Planned Miles','Actual Miles','Adjustment','Adjustment Reason','Route Source','Start Latitude','Start Longitude','Start Odometer','End Odometer'],...monthJourneys().map(j=>[new Date(j.date).toLocaleDateString(),j.from,j.to,j.type,j.purpose,j.plannedMiles??j.miles,j.miles,j.mileageAdjustment??0,j.adjustmentReason||'',j.routeSource||'',j.startCoords?.lat??'',j.startCoords?.lng??'',j.startOdo??'',j.endOdo??''])];
+  const csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  download(`Mileage_${currentMonthKey()}.csv`,csv,'text/csv');
+});
+
+// --- Version 5: populate the exact company workbook template ---
 function xmlEsc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function excelCol(n){let s='';while(n){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26);}return s;}
 function crc32(bytes){let c=0xffffffff;for(const b of bytes){c^=b;for(let k=0;k<8;k++)c=(c>>>1)^((c&1)?0xedb88320:0);}return (c^0xffffffff)>>>0;}
 function u16le(n){return [n&255,(n>>>8)&255];} function u32le(n){return [n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];}
 function makeZip(files){
   const enc=new TextEncoder(), chunks=[], central=[]; let offset=0;
   const add=arr=>{chunks.push(Uint8Array.from(arr));offset+=arr.length;};
   for(const f of files){const name=enc.encode(f.name),data=typeof f.data==='string'?enc.encode(f.data):f.data,crc=crc32(data),start=offset;
-    add([...u32le(0x04034b50),...u16le(20),...u16le(0),...u16le(0),...u16le(0),...u16le(0),...u32le(crc),...u32le(data.length),...u32le(data.length),...u16le(name.length),...u16le(0),...name]); chunks.push(data);offset+=data.length;
-    central.push({name,data,crc,start});
+    add([...u32le(0x04034b50),...u16le(20),...u16le(0),...u16le(0),...u16le(0),...u16le(0),...u32le(crc),...u32le(data.length),...u32le(data.length),...u16le(name.length),...u16le(0),...name]);chunks.push(data);offset+=data.length;central.push({name,data,crc,start});
   }
   const centralStart=offset;
   for(const f of central){add([...u32le(0x02014b50),...u16le(20),...u16le(20),...u16le(0),...u16le(0),...u16le(0),...u16le(0),...u32le(f.crc),...u32le(f.data.length),...u32le(f.data.length),...u16le(f.name.length),...u16le(0),...u16le(0),...u16le(0),...u16le(0),...u32le(0),...u32le(f.start),...f.name]);}
-  const centralSize=offset-centralStart; add([...u32le(0x06054b50),...u16le(0),...u16le(0),...u16le(central.length),...u16le(central.length),...u32le(centralSize),...u32le(centralStart),...u16le(0)]);
+  const centralSize=offset-centralStart;add([...u32le(0x06054b50),...u16le(0),...u16le(0),...u16le(central.length),...u16le(central.length),...u32le(centralSize),...u32le(centralStart),...u16le(0)]);
   return new Blob(chunks,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
-function xlsxCell(ref,value,style=0,formula=null){
-  if(formula!==null)return `<c r="${ref}" s="${style}"><f>${xmlEsc(formula)}</f><v>0</v></c>`;
-  if(value===null||value===undefined||value==='')return `<c r="${ref}" s="${style}"/>`;
-  if(typeof value==='number'&&Number.isFinite(value))return `<c r="${ref}" s="${style}"><v>${value}</v></c>`;
-  return `<c r="${ref}" s="${style}" t="inlineStr"><is><t>${xmlEsc(value)}</t></is></c>`;
+function b64Bytes(s){const bin=atob(s),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;}
+function templateFiles(){
+  if(!window.COMPANY_TEMPLATE_FILES) throw new Error('The company Excel template is missing from this version.');
+  return Object.entries(window.COMPANY_TEMPLATE_FILES).map(([name,b64])=>({name,data:b64Bytes(b64)}));
 }
-function companySheetXml(rows,monthLabel,startOdo,endOdo,isContinuation=false,offset=0){
-  const c=[];
-  const set=(ref,val,style=0,formula=null)=>c.push(xlsxCell(ref,val,style,formula));
-  set('B2','VEHICLE MILEAGE RETURN FOR THE MONTH OF',4); set('G2',isContinuation?`${monthLabel} - CONTINUATION`:monthLabel,4);
-  set('B4','NAME',3); set('C4',state.settings.driver||'',2); set('F4','       Mileage at start of month',3); set('I4',Number.isFinite(startOdo)?startOdo:'',5);
-  set('F5','       Mileage at end of month',3); set('I5',Number.isFinite(endOdo)?endOdo:'',5); set('B6','VEHICLE REG',3); set('D6',state.settings.vanReg||'',2);
-  set('G6','Miles in Month',3); set('I6','',5,'I5-I4'); set('C8',isContinuation?'RECORD OF BUSINESS MILEAGE - CONTINUATION':'RECORD OF BUSINESS MILEAGE',4);
-  for(const [ref,val,st] of [['B10','DATE',3],['C10','JOURNEY DETAILS',3],['H10','START',3],['I10','END',3],['J10','MILES',3],['H11','MILES',3],['I11','MILES',3],['J11','DRIVEN',3]]) set(ref,val,st);
-  rows.slice(0,31).forEach((j,i)=>{const r=12+i,d=new Date(j.date),date=`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-    const detail=`${j.from} → ${j.to}${j.purpose?' · '+j.purpose:''}${j.adjustmentReason?' · '+j.adjustmentReason:''}`;
-    set(`B${r}`,date,7); set(`C${r}`,detail,8); set(`H${r}`,Number.isFinite(Number(j.startOdo))?Number(j.startOdo):'',5); set(`I${r}`,Number.isFinite(Number(j.endOdo))?Number(j.endOdo):'',5);
-    // If odometer values exist, retain the company-style formula; otherwise write the recorded mileage.
-    if(Number.isFinite(Number(j.startOdo))&&Number.isFinite(Number(j.endOdo))) set(`J${r}`,'',5,`I${r}-H${r}`); else set(`J${r}`,Number(j.miles)||0,5);
-  });
-  for(let r=12+Math.min(rows.length,31);r<=42;r++) set(`J${r}`,'',5,'0');
-  set('F43','TOTAL BUSINESS MILES IN MONTH',3); set('J43','',6,'SUM(J12:J42)'); set('F44','TOTAL PRIVATE MILES IN MONTH',3);
-  // On the first sheet private mileage is total van mileage less all business mileage across all sheets; continuation sheet shows only its business subtotal.
-  if(!isContinuation) set('J44','',6,`MAX(0,I6-${rows._allBusinessCell||'J43'})`); else { set('J44','',6,'0'); }
-  if(!isContinuation){set('C48','Driver Signature',3);set('C50','Authorised by:   ',3);set('I50','H.O.D.',3);set('C52','Signed off:',3);set('I52','Management Team',3);}
-  const rowMap={}; for(const x of c){const m=x.match(/ r="[A-Z]+(\d+)"/); if(m)(rowMap[m[1]]??=[]).push(x);} 
-  const rowsXml=Object.keys(rowMap).map(Number).sort((a,b)=>a-b).map(r=>`<row r="${r}"${r>=12&&r<=44?' ht="17.65" customHeight="1"':''}>${rowMap[r].join('')}</row>`).join('');
-  const merges=['G2:I2','C4:E4','I4:J4','I5:J5','D6:E6','I6:J6','C8:G8',...Array.from({length:31},(_,i)=>`C${12+i}:G${12+i}`),...(!isContinuation?['E47:H48','E49:H50']:[])];
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView showGridLines="0" workbookViewId="0"><pane ySplit="11" topLeftCell="B12" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="13.5"/><cols><col min="1" max="1" width="3.6" customWidth="1"/><col min="2" max="2" width="10.1" customWidth="1"/><col min="3" max="6" width="11.5" customWidth="1"/><col min="7" max="7" width="5.4" customWidth="1"/><col min="8" max="8" width="13.4" customWidth="1"/><col min="9" max="9" width="12.7" customWidth="1"/><col min="10" max="10" width="12.2" customWidth="1"/></cols><sheetData>${rowsXml}</sheetData><mergeCells count="${merges.length}">${merges.map(r=>`<mergeCell ref="${r}"/>`).join('')}</mergeCells><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.1" footer="0.1"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="1"/></worksheet>`;
+function replaceCell(xml,ref,value,{formula=null,cached=null}={}){
+  const re=new RegExp(`<c\\s+([^>]*\\br="${ref}"[^>]*)\\s*(?:/>|>([\\s\\S]*?)<\\/c>)`);
+  const m=xml.match(re); if(!m) throw new Error(`Template cell ${ref} was not found.`);
+  const attrs=m[1].replace(/\\s+t="[^"]*"/g,'');
+  let cell='';
+  if(formula!==null){cell=`<c ${attrs}><f>${xmlEsc(formula)}</f><v>${Number.isFinite(Number(cached))?Number(cached):0}</v></c>`;}
+  else if(value===null||value===undefined||value===''){cell=`<c ${attrs}/>`;}
+  else if(typeof value==='number'&&Number.isFinite(value)){cell=`<c ${attrs}><v>${value}</v></c>`;}
+  else {cell=`<c ${attrs} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(value)}</t></is></c>`;}
+  return xml.replace(re,cell);
 }
+function journeyDetail(j){return `${j.from} - ${j.to}${j.purpose?' - '+j.purpose:''}${j.adjustmentReason?' - '+j.adjustmentReason:''}`;}
 function buildCompanyXlsx(){
-  const work=companyRows(); const now=new Date(), monthLabel=now.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const work=companyRows();
+  if(work.length>31) throw new Error(`This month has ${work.length} business journeys. The company form has 31 lines. Export the first 31 now; continuation-sheet support will be added if you need it.`);
+  const dec=new TextDecoder(), enc=new TextEncoder();
+  const files=templateFiles();
+  const sheetFile=files.find(f=>f.name==='xl/worksheets/sheet1.xml');
+  const wbFile=files.find(f=>f.name==='xl/workbook.xml');
+  if(!sheetFile||!wbFile) throw new Error('The company workbook template is incomplete.');
+  let xml=dec.decode(sheetFile.data);
+  const now=new Date(); const monthLabel=now.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
   const startRaw=state.settings.monthStartOdo, endRaw=state.settings.monthEndOdo;
   const startOdo=(startRaw!==null&&startRaw!==''&&Number.isFinite(Number(startRaw)))?Number(startRaw):null;
   const endOdo=(endRaw!==null&&endRaw!==''&&Number.isFinite(Number(endRaw)))?Number(endRaw):(Number.isFinite(Number(state.settings.currentOdo))?Number(state.settings.currentOdo):null);
-  const chunks=[]; for(let i=0;i<work.length;i+=31) chunks.push(work.slice(i,i+31)); if(!chunks.length)chunks.push([]);
-  // Total business across sheets: first sheet J43 + continuation J43 cells.
-  let allBusiness='J43'; for(let i=1;i<chunks.length;i++) allBusiness+=`+'Continuation ${i}'!J43`;
-  chunks[0]._allBusinessCell=allBusiness;
-  const sheetNames=chunks.map((_,i)=>i===0?'Mileage Return':`Continuation ${i}`);
-  const sheets=chunks.map((rows,i)=>companySheetXml(rows,monthLabel,startOdo,endOdo,i>0,i*31));
-  const contentTypes=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
-  const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
-  const workbook=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><workbookPr/><bookViews><workbookView/></bookViews><sheets>${sheetNames.map((n,i)=>`<sheet name="${xmlEsc(n)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets><calcPr calcId="191029" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`;
-  const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
-  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="0.0"/></numFmts><fonts count="4"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><b/><sz val="12"/><name val="Arial"/></font><font><sz val="9"/><name val="Arial"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="164" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
-  const core=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Stage Electrics Vehicle Mileage Return</dc:title><dc:creator>Mileage Tracker V4</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`;
-  const props=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Mileage Tracker V4</Application></Properties>`;
-  const files=[{name:'[Content_Types].xml',data:contentTypes},{name:'_rels/.rels',data:rootRels},{name:'xl/workbook.xml',data:workbook},{name:'xl/_rels/workbook.xml.rels',data:wbRels},{name:'xl/styles.xml',data:styles},{name:'docProps/core.xml',data:core},{name:'docProps/app.xml',data:props},...sheets.map((x,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:x}))];
+  const milesMonth=(startOdo!==null&&endOdo!==null)?round2(endOdo-startOdo):0;
+  const businessTotal=round2(work.reduce((s,j)=>s+(Number(j.miles)||0),0));
+  const privateTotal=Math.max(0,round2(milesMonth-businessTotal));
+  xml=replaceCell(xml,'G2',monthLabel);
+  xml=replaceCell(xml,'C4',state.settings.driver||'');
+  xml=replaceCell(xml,'I4',startOdo===null?'':startOdo);
+  xml=replaceCell(xml,'I5',endOdo===null?'':endOdo);
+  xml=replaceCell(xml,'D6',state.settings.vanReg||'');
+  xml=replaceCell(xml,'I6','',{formula:'I5-I4',cached:milesMonth});
+  for(let i=0;i<31;i++){
+    const r=12+i,j=work[i];
+    if(j){
+      const d=new Date(j.date); const date=`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+      const so=Number.isFinite(Number(j.startOdo))?Number(j.startOdo):null, eo=Number.isFinite(Number(j.endOdo))?Number(j.endOdo):null;
+      xml=replaceCell(xml,`B${r}`,date); xml=replaceCell(xml,`C${r}`,journeyDetail(j)); xml=replaceCell(xml,`H${r}`,so===null?'':so); xml=replaceCell(xml,`I${r}`,eo===null?'':eo);
+      const miles=round2(Number(j.miles)||0); xml=replaceCell(xml,`J${r}`,'',{formula:`I${r}-H${r}`,cached:miles});
+    }else{
+      xml=replaceCell(xml,`B${r}`,''); xml=replaceCell(xml,`C${r}`,''); xml=replaceCell(xml,`H${r}`,''); xml=replaceCell(xml,`I${r}`,''); xml=replaceCell(xml,`J${r}`,'',{formula:`I${r}-H${r}`,cached:0});
+    }
+  }
+  xml=replaceCell(xml,'J43','',{formula:'SUM(J12:J42)',cached:businessTotal});
+  xml=replaceCell(xml,'J44','',{formula:'I6-J43',cached:privateTotal});
+  sheetFile.data=enc.encode(xml);
+  let wb=dec.decode(wbFile.data);
+  wb=wb.replace(/<calcPr[^>]*\/>/, '<calcPr calcId="191029" fullCalcOnLoad="1" forceFullCalc="1"/>');
+  wbFile.data=enc.encode(wb);
   return makeZip(files);
 }
-$('#exportXlsBtn').onclick=()=>{try{const blob=buildCompanyXlsx(),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`Stage_Electrics_Mileage_Return_${currentMonthKey()}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);}catch(err){console.error(err);alert('Could not create the company Excel workbook: '+(err.message||err));}};
+
+$('#exportXlsBtn').onclick=()=>setExportFeedback($('#exportXlsBtn'),'PREPARING…','DOWNLOADED ✓',()=>{
+  const blob=buildCompanyXlsx(),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=`Stage_Electrics_Mileage_Return_${currentMonthKey()}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+});
 
 window.addEventListener('beforeinstallprompt' ,e=>{e.preventDefault();deferredInstallPrompt=e;$('#installBtn').classList.remove('hidden');$('#installHint').classList.remove('hidden');$('#installHint').textContent='Mileage Tracker is ready to install on this device.'});
 $('#installBtn').onclick=async()=>{if(!deferredInstallPrompt)return;deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;$('#installBtn').classList.add('hidden');$('#installHint').classList.add('hidden')};
