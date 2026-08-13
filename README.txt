@@ -1,4 +1,4 @@
-Mileage Tracker - Test Drive V5.4
+Mileage Tracker - Test Drive V5.4.1
 
 PATCH
 Fixes the company XLSX export so Excel opens the generated workbook without repairing sheet XML. Also removes the stale calculation-chain part from the generated workbook. Existing settings and journey data are preserved.
@@ -18,7 +18,7 @@ The supplied company form contains 31 business-journey lines. V5 preserves that 
 
 UPDATE ON GITHUB
 ----------------
-Upload all V5 files over the files already in your mileage-tracker repository. Wait for GitHub Pages to deploy, then fully close and reopen the installed app. The header should show Test Drive v5.4
+Upload all V5 files over the files already in your mileage-tracker repository. Wait for GitHub Pages to deploy, then fully close and reopen the installed app. The header should show Test Drive v5.4.1
 
 If the installed app still shows V4, open the GitHub Pages address in Chrome, refresh it once, then reopen the installed app.
 
@@ -40,3 +40,8 @@ V5.4 CHANGES
 - Month End Odometer follows the running Current Odometer after each saved journey.
 - A manual Current Odometer correction in Settings becomes authoritative and is recorded as the latest correction.
 - Company XLSX journey details use concise road/location names (text before the first comma), while full Google addresses remain stored in the app/history.
+
+V5.4.1 INSTALL REFRESH
+- Corrected manifest install name to V5.4.1.
+- Changed icon filenames to force browsers/launchers to fetch the new tracked-van artwork.
+- Updated service-worker cache name and icon references.

@@ -1,6 +1,6 @@
 {
-  "name": "Mileage Tracker Test Drive V5.3",
-  "short_name": "Mileage V4",
+  "name": "Mileage Tracker Test Drive V5.4.1",
+  "short_name": "Mileage Tracker",
   "description": "Track work and personal mileage with traffic-aware routes, odometer updates and monthly mileage returns.",
   "start_url": "./index.html",
   "scope": "./",
@@ -10,13 +10,13 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "icons/icon-192.png",
+      "src": "icons/icon-192-v541.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "icons/icon-512-v541.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
