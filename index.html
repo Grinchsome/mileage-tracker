@@ -18,7 +18,7 @@
   <header>
     <div>
       <div class="brand">Mileage Tracker</div>
-      <div class="subtle">Test Drive v5.3</div>
+      <div class="subtle">Test Drive v5.4</div>
     </div>
     <div class="header-actions">
       <button id="installBtn" class="mini primary hidden">Install</button>
@@ -138,7 +138,7 @@
   <div class="field"><label>Google Maps Platform API key</label><input id="mapsApiKeyInput" type="password" autocomplete="off" placeholder="Stored only on this device" /></div>
   <div class="notice"><strong>For address lookup + route mileage.</strong> Enable Maps JavaScript API, Routes API and Geocoding API for the key. Restrict the key to your GitHub Pages website. The key is kept in this phone/browser's local storage, not added to the GitHub files.</div>
   <div id="mapsApiStatus" class="small"></div>
-  <div class="field"><label>Current odometer</label><input id="currentOdoInput" type="number" inputmode="decimal" step="0.1" /></div>
+  <div class="field"><label>Current odometer</label><input id="currentOdoInput" type="number" inputmode="decimal" step="0.1" /><div id="odoCorrectionStatus" class="subtle top-gap-small">Current odometer will advance automatically when each journey is saved.</div></div>
   <div class="grid2">
     <div class="field"><label>Month start odometer</label><input id="monthStartInput" type="number" inputmode="decimal" step="0.1" /></div>
     <div class="field"><label>Month end odometer</label><input id="monthEndInput" type="number" inputmode="decimal" step="0.1" /></div>

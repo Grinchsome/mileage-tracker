@@ -5,7 +5,7 @@ const defaults = {
   settings: {
     driver: '', vanReg: 'VN22 XBC', homeLocation: '', workLocation: 'Stage Electrics, Bristol',
     homeCoords: null, workCoords: null, mapsApiKey: '', currentOdo: 48236,
-    monthStartOdo: null, monthEndOdo: null
+    monthStartOdo: null, monthEndOdo: null, lastOdoCorrection: null
   },
   journeys: [], active: null
 };
@@ -55,7 +55,7 @@ function renderAll(){
   const t=totals();
   $('#vanRegHome').textContent=state.settings.vanReg||'—';
   $('#driverHome').textContent=state.settings.driver||'Driver';
-  $('#odoHome').textContent=Number(state.settings.currentOdo||0).toLocaleString();
+  $('#odoHome').textContent=Number(state.settings.currentOdo||0).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:2});
   $('#workTotal').textContent=fmt(t.w); $('#personalTotal').textContent=fmt(t.p); $('#allTotal').textContent=fmt(t.all);
   $('#monthLabel').textContent=new Date().toLocaleDateString(undefined,{month:'long',year:'numeric'});
   $('#activeResume').classList.toggle('hidden',!state.active);
@@ -215,9 +215,21 @@ function startJourney(){
   const from=$('#fromInput').value.trim(), to=$('#destInput').value.trim();
   if(!from||!to){alert('Please enter both the start and destination.');return;}
   if(!routeDraft){alert('Please calculate the route mileage or enter it manually before starting.');return;}
+  const enteredStart=Number($('#startOdoInput').value);
+  const current=Number(state.settings.currentOdo||0);
+  const startOdo=Number.isFinite(enteredStart)?round2(enteredStart):round2(current);
+  // The starting odometer shown for a new trip is authoritative. If the driver
+  // corrects it before departure, align Current Odometer immediately so future
+  // journeys cannot continue from a stale value.
+  if(Number.isFinite(startOdo) && Math.abs(startOdo-current)>0.001){
+    state.settings.currentOdo=startOdo;
+    state.settings.lastOdoCorrection={value:startOdo,at:new Date().toISOString(),source:'journey-start'};
+  }
+  if(state.settings.monthStartOdo===null||state.settings.monthStartOdo==='') state.settings.monthStartOdo=startOdo;
+  state.settings.monthEndOdo=startOdo;
   state.active={
     id:String(Date.now()), date:new Date().toISOString(), from, to, type:selectedType,
-    purpose:selectedType==='Work'?$('#purposeInput').value.trim():'', startOdo:$('#startOdoInput').value?Number($('#startOdoInput').value):null,
+    purpose:selectedType==='Work'?$('#purposeInput').value.trim():'', startOdo,
     startTime:new Date().toISOString(), startCoords:draftStartCoords, plannedMiles:Number(routeDraft.miles), routeMeters:routeDraft.meters||null,
     routeSource:routeDraft.source, routeDuration:routeDraft.durationText||'', routeCalculatedAt:routeDraft.calculatedAt||new Date().toISOString()
   };
@@ -275,14 +287,21 @@ function saveJourney(){
   if(!state.active)return;
   const miles=Number($('#finishMilesInput').value); if(!Number.isFinite(miles)||miles<0){alert('Please enter a valid actual mileage.');return;}
   const planned=Number(state.active.plannedMiles||0);
-  const startOdo=Number.isFinite(Number(state.active.startOdo)) ? Number(state.active.startOdo) : Number(state.settings.currentOdo||0);
+  const activeStart=Number(state.active.startOdo);
+  const liveCurrent=Number(state.settings.currentOdo);
+  // Current Odometer is the running authoritative figure. Normally it will be
+  // identical to the trip start; using it here prevents an older/stale active
+  // journey value from pulling the running odometer backwards.
+  const startOdo=Number.isFinite(liveCurrent)?round2(liveCurrent):(Number.isFinite(activeStart)?round2(activeStart):0);
   const enteredEnd=$('#finishOdoInput').value.trim();
   const endOdo=enteredEnd ? Number(enteredEnd) : round2(startOdo+miles);
   if(!Number.isFinite(endOdo)||endOdo<startOdo){alert('Please check the ending odometer reading.');return;}
   const reason=$('#adjustmentReasonInput').value.trim();
-  const j={...state.active,miles:round2(miles),plannedMiles:round2(planned),mileageAdjustment:round2(miles-planned),adjustmentReason:reason,endOdo:round2(endOdo),endTime:new Date().toISOString()};
+  const j={...state.active,startOdo,miles:round2(miles),plannedMiles:round2(planned),mileageAdjustment:round2(miles-planned),adjustmentReason:reason,endOdo:round2(endOdo),endTime:new Date().toISOString()};
   state.journeys.push(j);
   state.settings.currentOdo=round2(endOdo);
+  state.settings.monthEndOdo=round2(endOdo);
+  if(state.settings.monthStartOdo===null||state.settings.monthStartOdo==='') state.settings.monthStartOdo=startOdo;
   state.active=null; clearInterval(timerId); $('#finishModal').classList.add('hidden'); save(); showScreen('home');
 }
 
@@ -309,15 +328,16 @@ $('#usePlannedBtn').onclick=()=>{if(!state.active)return;$('#finishMilesInput').
 
 $('#settingsBtn').onclick=()=>{
   const s=state.settings; $('#driverInput').value=s.driver||'';$('#vanRegInput').value=s.vanReg||'';$('#homeLocationInput').value=s.homeLocation||'';$('#workLocationInput').value=s.workLocation||'';$('#mapsApiKeyInput').value=s.mapsApiKey||'';$('#currentOdoInput').value=s.currentOdo??'';$('#monthStartInput').value=s.monthStartOdo??'';$('#monthEndInput').value=s.monthEndOdo??'';
-  $('#mapsApiStatus').textContent=s.mapsApiKey?'Google features configured on this device.':'Google features not configured yet; manual mileage still works.'; $('#settingsModal').classList.remove('hidden');
+  $('#mapsApiStatus').textContent=s.mapsApiKey?'Google features configured on this device.':'Google features not configured yet; manual mileage still works.'; const corr=$('#odoCorrectionStatus'); if(corr){corr.textContent=s.lastOdoCorrection?`Last manual correction: ${Number(s.lastOdoCorrection.value).toFixed(1)} miles · ${new Date(s.lastOdoCorrection.at).toLocaleString()}`:'Current odometer will advance automatically when each journey is saved.';} $('#settingsModal').classList.remove('hidden');
 };
 $('#closeSettingsBtn').onclick=()=>$('#settingsModal').classList.add('hidden');
 $('#saveSettingsBtn').onclick=async()=>{
   const oldKey=state.settings.mapsApiKey||'';
   state.settings.driver=$('#driverInput').value.trim(); state.settings.vanReg=$('#vanRegInput').value.trim().toUpperCase();
   state.settings.homeLocation=$('#homeLocationInput').value.trim(); state.settings.workLocation=$('#workLocationInput').value.trim();
-  state.settings.mapsApiKey=$('#mapsApiKeyInput').value.trim(); state.settings.currentOdo=Number($('#currentOdoInput').value)||0;
+  state.settings.mapsApiKey=$('#mapsApiKeyInput').value.trim(); const previousCurrent=Number(state.settings.currentOdo||0); const enteredCurrent=Number($('#currentOdoInput').value)||0; state.settings.currentOdo=round2(enteredCurrent);
   state.settings.monthStartOdo=$('#monthStartInput').value===''?null:Number($('#monthStartInput').value); state.settings.monthEndOdo=$('#monthEndInput').value===''?null:Number($('#monthEndInput').value);
+  if(Math.abs(enteredCurrent-previousCurrent)>0.001){ state.settings.lastOdoCorrection={value:round2(enteredCurrent),at:new Date().toISOString(),source:'settings'}; state.settings.monthEndOdo=round2(enteredCurrent); }
   if(oldKey!==state.settings.mapsApiKey) mapsLoadPromise=null;
   save();
   if(state.settings.mapsApiKey){
@@ -441,7 +461,16 @@ function reconciledOdometerReadings(){
   }
   return out;
 }
-function journeyDetail(j){return `${j.from} - ${j.to}${j.purpose?' - '+j.purpose:''}${j.adjustmentReason?' - '+j.adjustmentReason:''}`;}
+function shortExportAddress(value){
+  const raw=String(value||'').trim();
+  if(!raw) return '';
+  // Google addresses are normally ordered from the most useful/local part to
+  // town, postcode and country. For the company form we keep only that first
+  // segment (e.g. '5 Station Rd') while the full address remains stored in app.
+  const first=raw.split(',')[0].trim();
+  return first||raw;
+}
+function journeyDetail(j){return `${shortExportAddress(j.from)} - ${shortExportAddress(j.to)}${j.purpose?' - '+j.purpose:''}${j.adjustmentReason?' - '+j.adjustmentReason:''}`;}
 function buildCompanyXlsx(){
   const work=companyRows();
   const odoReadings=reconciledOdometerReadings();
