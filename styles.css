@@ -27,3 +27,5 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(520px,
   color: #fff;
   opacity: 1;
 }
+
+.journey-side{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex:0 0 auto}.journey-delete{border:0;background:transparent;color:var(--red);font-size:12px;font-weight:800;padding:3px 0;cursor:pointer}.journey-delete:active{opacity:.55}

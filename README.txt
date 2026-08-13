@@ -1,4 +1,4 @@
-Mileage Tracker - Test Drive V5.2
+Mileage Tracker - Test Drive V5.3
 
 PATCH
 Fixes the company XLSX export so Excel opens the generated workbook without repairing sheet XML. Also removes the stale calculation-chain part from the generated workbook. Existing settings and journey data are preserved.
@@ -18,10 +18,18 @@ The supplied company form contains 31 business-journey lines. V5 preserves that 
 
 UPDATE ON GITHUB
 ----------------
-Upload all V5 files over the files already in your mileage-tracker repository. Wait for GitHub Pages to deploy, then fully close and reopen the installed app. The header should show Test Drive v5.
+Upload all V5 files over the files already in your mileage-tracker repository. Wait for GitHub Pages to deploy, then fully close and reopen the installed app. The header should show Test Drive v5.3
 
 If the installed app still shows V4, open the GitHub Pages address in Chrome, refresh it once, then reopen the installed app.
 
 SHARING THE APP
 ---------------
 The Google Maps API key remains stored locally on each device. Sharing the GitHub Pages URL does not automatically share your key.
+
+
+V5.3 changes
+------------
+- Adds a Delete button to every Journey History entry.
+- Deleting requires confirmation and removes only that journey from history, monthly totals and exports.
+- Deleting a journey does not alter the current van odometer.
+- Company XLSX export can reconstruct missing/inconsistent legacy journey odometer readings from chronological recorded mileage, including Personal trips between Work trips.

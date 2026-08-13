@@ -66,7 +66,18 @@ function renderHistory(){
   const list=$('#historyList');
   const rows=[...state.journeys].sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!rows.length){list.innerHTML='<div class="center subtle">No journeys recorded yet.</div>';return;}
-  list.innerHTML=rows.map(j=>`<div class="journey"><div class="row space"><div><div class="journey-title">${esc(j.from)} → ${esc(j.to)}</div><div class="journey-meta">${new Date(j.date).toLocaleString()} · ${j.routeSource==='google'?'Google route':j.routeSource==='manual'?'Manual route':'Recorded'}${j.purpose?' · '+esc(j.purpose):''}${j.adjustmentReason?' · '+esc(j.adjustmentReason):''}${Number(j.mileageAdjustment)?` · ${Number(j.mileageAdjustment)>0?'+':''}${Number(j.mileageAdjustment).toFixed(1)} mi vs planned`:''}</div></div><div class="miles">${Number(j.miles).toFixed(1)} mi</div></div><div class="top-gap-small"><span class="tag ${j.type==='Work'?'work':'personal'}">${esc(j.type.toUpperCase())}</span></div></div>`).join('');
+  list.innerHTML=rows.map(j=>`<div class="journey"><div class="row space"><div><div class="journey-title">${esc(j.from)} → ${esc(j.to)}</div><div class="journey-meta">${new Date(j.date).toLocaleString()} · ${j.routeSource==='google'?'Google route':j.routeSource==='manual'?'Manual route':'Recorded'}${j.purpose?' · '+esc(j.purpose):''}${j.adjustmentReason?' · '+esc(j.adjustmentReason):''}${Number(j.mileageAdjustment)?` · ${Number(j.mileageAdjustment)>0?'+':''}${Number(j.mileageAdjustment).toFixed(1)} mi vs planned`:''}</div></div><div class="journey-side"><div class="miles">${Number(j.miles).toFixed(1)} mi</div><button class="journey-delete" data-delete-id="${esc(j.id)}" type="button">Delete</button></div></div><div class="top-gap-small"><span class="tag ${j.type==='Work'?'work':'personal'}">${esc(j.type.toUpperCase())}</span></div></div>`).join('');
+  list.querySelectorAll('.journey-delete').forEach(btn=>btn.addEventListener('click',()=>deleteJourney(btn.dataset.deleteId)));
+}
+
+function deleteJourney(id){
+  const j=state.journeys.find(x=>String(x.id)===String(id));
+  if(!j) return;
+  const when=j.date?new Date(j.date).toLocaleString():'this journey';
+  const message=`Delete this ${String(j.type||'').toLowerCase()} journey?\n\n${j.from} → ${j.to}\n${when} · ${Number(j.miles||0).toFixed(1)} miles\n\nIt will be removed from History, monthly totals and exports. Your current van odometer will NOT be changed.`;
+  if(!confirm(message)) return;
+  state.journeys=state.journeys.filter(x=>String(x.id)!==String(id));
+  save();
 }
 
 function renderMonthly(){
@@ -411,9 +422,29 @@ function replaceCell(xml,ref,value,{formula=null,cached=null}={}){
   else {cell=`<c ${attrs} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(value)}</t></is></c>`;}
   return xml.replace(re,cell);
 }
+function reconciledOdometerReadings(){
+  const rows=[...monthJourneys()].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const startRaw=state.settings.monthStartOdo;
+  let cursor=(startRaw!==null&&startRaw!==''&&Number.isFinite(Number(startRaw)))?Number(startRaw):null;
+  const out=new Map();
+  for(const j of rows){
+    const miles=round2(Number(j.miles)||0);
+    const so=Number(j.startOdo), eo=Number(j.endOdo);
+    const storedValid=Number.isFinite(so)&&Number.isFinite(eo)&&eo>=so&&Math.abs((eo-so)-miles)<=0.25;
+    let start=null,end=null,source='';
+    if(storedValid){start=round2(so);end=round2(eo);source='stored';}
+    else if(Number.isFinite(cursor)){start=round2(cursor);end=round2(cursor+miles);source='reconstructed';}
+    else if(Number.isFinite(so)&&so>=0){start=round2(so);end=round2(so+miles);source='reconstructed';}
+    else if(Number.isFinite(eo)&&eo>=miles){end=round2(eo);start=round2(eo-miles);source='reconstructed';}
+    if(Number.isFinite(end)) cursor=end;
+    out.set(String(j.id),{startOdo:start,endOdo:end,source});
+  }
+  return out;
+}
 function journeyDetail(j){return `${j.from} - ${j.to}${j.purpose?' - '+j.purpose:''}${j.adjustmentReason?' - '+j.adjustmentReason:''}`;}
 function buildCompanyXlsx(){
   const work=companyRows();
+  const odoReadings=reconciledOdometerReadings();
   if(work.length>31) throw new Error(`This month has ${work.length} business journeys. The company form has 31 lines. Export the first 31 now; continuation-sheet support will be added if you need it.`);
   const dec=new TextDecoder(), enc=new TextEncoder();
   const files=templateFiles();
@@ -438,7 +469,8 @@ function buildCompanyXlsx(){
     const r=12+i,j=work[i];
     if(j){
       const d=new Date(j.date); const date=`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-      const so=Number.isFinite(Number(j.startOdo))?Number(j.startOdo):null, eo=Number.isFinite(Number(j.endOdo))?Number(j.endOdo):null;
+      const odos=odoReadings.get(String(j.id))||{};
+      const so=Number.isFinite(Number(odos.startOdo))?Number(odos.startOdo):null, eo=Number.isFinite(Number(odos.endOdo))?Number(odos.endOdo):null;
       xml=replaceCell(xml,`B${r}`,date); xml=replaceCell(xml,`C${r}`,journeyDetail(j)); xml=replaceCell(xml,`H${r}`,so===null?'':so); xml=replaceCell(xml,`I${r}`,eo===null?'':eo);
       const miles=round2(Number(j.miles)||0); xml=replaceCell(xml,`J${r}`,'',{formula:`I${r}-H${r}`,cached:miles});
     }else{
