@@ -385,7 +385,7 @@ function templateFiles(){
   return Object.entries(window.COMPANY_TEMPLATE_FILES).map(([name,b64])=>({name,data:b64Bytes(b64)}));
 }
 function replaceCell(xml,ref,value,{formula=null,cached=null}={}){
-  const re=new RegExp(`<c\\s+([^>]*\\br="${ref}"[^>]*)\\s*(?:/>|>([\\s\\S]*?)<\\/c>)`);
+  const re=new RegExp(`<c\\s+([^>]*\\br="${ref}"[^>]*?)(?:\\s*/>|>([\\s\\S]*?)<\\/c>)`);
   const m=xml.match(re); if(!m) throw new Error(`Template cell ${ref} was not found.`);
   const attrs=m[1].replace(/\\s+t="[^"]*"/g,'');
   let cell='';

@@ -1,4 +1,7 @@
-Mileage Tracker - Test Drive V5
+Mileage Tracker - Test Drive V5.1
+
+PATCH
+Fixes the company XLSX export error "Template cell C12 was not found" caused by blank/self-closing cells in the original Excel template. Existing V5 settings and journey data are preserved.
 
 WHAT CHANGED IN V5
 ------------------
