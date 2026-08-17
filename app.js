@@ -5,7 +5,7 @@ const defaults = {
   settings: {
     driver: '', vanReg: 'VN22 XBC', homeLocation: '', workLocation: 'Stage Electrics, Bristol',
     homeCoords: null, workCoords: null, mapsApiKey: '', currentOdo: 48236,
-    monthStartOdo: null, monthEndOdo: null, lastOdoCorrection: null
+    monthStartOdo: null, monthEndOdo: null, lastOdoCorrection: null, signatureData: '', includeSignature: true
   },
   journeys: [], active: null
 };
@@ -326,8 +326,36 @@ $('#finishOdoInput').addEventListener('input',updateFinishOdometerPreview);
 $('#detourQuickBtn').onclick=()=>{const input=$('#adjustmentReasonInput');if(!input.value.trim())input.value='Detour / road closure';$('#detourQuickBtn').classList.add('selected-adjustment');input.focus();};
 $('#usePlannedBtn').onclick=()=>{if(!state.active)return;$('#finishMilesInput').value=Number(state.active.plannedMiles||0).toFixed(2);$('#actualPreviewMiles').textContent=`${Number(state.active.plannedMiles||0).toFixed(1)} mi`;updateFinishOdometerPreview();};
 
+
+function renderSignatureSettings(){
+  const data=state.settings.signatureData||'';
+  const wrap=$('#signaturePreviewWrap'),empty=$('#signatureEmpty'),img=$('#signaturePreview'),clear=$('#clearSignatureBtn');
+  if(data){img.src=data;wrap.classList.remove('hidden');empty.classList.add('hidden');clear.classList.remove('hidden');}
+  else{img.removeAttribute('src');wrap.classList.add('hidden');empty.classList.remove('hidden');clear.classList.add('hidden');}
+}
+let signatureDrawing=false, signatureHasInk=false;
+function signatureCanvas(){return $('#signatureCanvas');}
+function signatureCtx(){const c=signatureCanvas(),ctx=c.getContext('2d');ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#14213d';ctx.lineWidth=5;return ctx;}
+function signaturePoint(e){const c=signatureCanvas(),r=c.getBoundingClientRect();return {x:(e.clientX-r.left)*(c.width/r.width),y:(e.clientY-r.top)*(c.height/r.height)};}
+function clearSignatureCanvas(){const c=signatureCanvas(),ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);signatureHasInk=false;}
+function openSignaturePad(){
+  clearSignatureCanvas();
+  const existing=state.settings.signatureData||'';
+  $('#signatureModal').classList.remove('hidden');
+  if(existing){const img=new Image();img.onload=()=>{const c=signatureCanvas(),ctx=c.getContext('2d');ctx.drawImage(img,0,0,c.width,c.height);signatureHasInk=true;};img.src=existing;}
+}
+$('#editSignatureBtn').onclick=openSignaturePad;
+$('#closeSignaturePadBtn').onclick=()=>$('#signatureModal').classList.add('hidden');
+$('#clearSignaturePadBtn').onclick=clearSignatureCanvas;
+$('#clearSignatureBtn').onclick=()=>{if(!confirm('Clear the saved driver signature from this device?'))return;state.settings.signatureData='';save();renderSignatureSettings();};
+signatureCanvas().addEventListener('pointerdown',e=>{signatureDrawing=true;signatureHasInk=true;signatureCanvas().setPointerCapture?.(e.pointerId);const p=signaturePoint(e),ctx=signatureCtx();ctx.beginPath();ctx.moveTo(p.x,p.y);e.preventDefault();});
+signatureCanvas().addEventListener('pointermove',e=>{if(!signatureDrawing)return;const p=signaturePoint(e),ctx=signatureCtx();ctx.lineTo(p.x,p.y);ctx.stroke();e.preventDefault();});
+['pointerup','pointercancel','pointerleave'].forEach(type=>signatureCanvas().addEventListener(type,e=>{if(signatureDrawing){signatureCtx().closePath();signatureDrawing=false;}e.preventDefault();}));
+$('#saveSignaturePadBtn').onclick=()=>{if(!signatureHasInk)return alert('Please add your signature first.');state.settings.signatureData=signatureCanvas().toDataURL('image/png');state.settings.includeSignature=true;$('#includeSignatureInput').checked=true;save();renderSignatureSettings();$('#signatureModal').classList.add('hidden');};
+
 $('#settingsBtn').onclick=()=>{
   const s=state.settings; $('#driverInput').value=s.driver||'';$('#vanRegInput').value=s.vanReg||'';$('#homeLocationInput').value=s.homeLocation||'';$('#workLocationInput').value=s.workLocation||'';$('#mapsApiKeyInput').value=s.mapsApiKey||'';$('#currentOdoInput').value=s.currentOdo??'';$('#monthStartInput').value=s.monthStartOdo??'';$('#monthEndInput').value=s.monthEndOdo??'';
+  $('#includeSignatureInput').checked=s.includeSignature!==false; renderSignatureSettings();
   $('#mapsApiStatus').textContent=s.mapsApiKey?'Google features configured on this device.':'Google features not configured yet; manual mileage still works.'; const corr=$('#odoCorrectionStatus'); if(corr){corr.textContent=s.lastOdoCorrection?`Last manual correction: ${Number(s.lastOdoCorrection.value).toFixed(1)} miles · ${new Date(s.lastOdoCorrection.at).toLocaleString()}`:'Current odometer will advance automatically when each journey is saved.';} $('#settingsModal').classList.remove('hidden');
 };
 $('#closeSettingsBtn').onclick=()=>$('#settingsModal').classList.add('hidden');
@@ -336,7 +364,7 @@ $('#saveSettingsBtn').onclick=async()=>{
   state.settings.driver=$('#driverInput').value.trim(); state.settings.vanReg=$('#vanRegInput').value.trim().toUpperCase();
   state.settings.homeLocation=$('#homeLocationInput').value.trim(); state.settings.workLocation=$('#workLocationInput').value.trim();
   state.settings.mapsApiKey=$('#mapsApiKeyInput').value.trim(); const previousCurrent=Number(state.settings.currentOdo||0); const enteredCurrent=Number($('#currentOdoInput').value)||0; state.settings.currentOdo=round2(enteredCurrent);
-  state.settings.monthStartOdo=$('#monthStartInput').value===''?null:Number($('#monthStartInput').value); state.settings.monthEndOdo=$('#monthEndInput').value===''?null:Number($('#monthEndInput').value);
+  state.settings.monthStartOdo=$('#monthStartInput').value===''?null:Number($('#monthStartInput').value); state.settings.monthEndOdo=$('#monthEndInput').value===''?null:Number($('#monthEndInput').value); state.settings.includeSignature=$('#includeSignatureInput').checked;
   if(Math.abs(enteredCurrent-previousCurrent)>0.001){ state.settings.lastOdoCorrection={value:round2(enteredCurrent),at:new Date().toISOString(),source:'settings'}; state.settings.monthEndOdo=round2(enteredCurrent); }
   if(oldKey!==state.settings.mapsApiKey) mapsLoadPromise=null;
   save();
@@ -471,6 +499,34 @@ function shortExportAddress(value){
   return first||raw;
 }
 function journeyDetail(j){return `${shortExportAddress(j.from)} - ${shortExportAddress(j.to)}${j.purpose?' - '+j.purpose:''}${j.adjustmentReason?' - '+j.adjustmentReason:''}`;}
+
+function dataUrlBytes(dataUrl){
+  const comma=String(dataUrl||'').indexOf(','); if(comma<0) return null;
+  return b64Bytes(String(dataUrl).slice(comma+1));
+}
+function upsertFile(files,name,data){const f=files.find(x=>x.name===name);if(f)f.data=data;else files.push({name,data});}
+function addSignatureToWorkbook(files,sheetFile){
+  if(state.settings.includeSignature===false||!state.settings.signatureData)return;
+  const png=dataUrlBytes(state.settings.signatureData); if(!png||!png.length)return;
+  const dec=new TextDecoder(),enc=new TextEncoder();
+  let sheet=dec.decode(sheetFile.data);
+  if(!/<drawing\b/.test(sheet)) sheet=sheet.replace('</worksheet>','<drawing r:id="rId2"/></worksheet>');
+  sheetFile.data=enc.encode(sheet);
+
+  const relName='xl/worksheets/_rels/sheet1.xml.rels'; let rel=files.find(f=>f.name===relName);
+  let relXml=rel?dec.decode(rel.data):'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  if(!/relationships\/drawing/.test(relXml)) relXml=relXml.replace('</Relationships>','<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>');
+  upsertFile(files,relName,enc.encode(relXml));
+
+  const drawing=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>4</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>46</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>8</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>48</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Driver Signature"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm/><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
+  const drawingRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>`;
+  upsertFile(files,'xl/drawings/drawing1.xml',enc.encode(drawing));
+  upsertFile(files,'xl/drawings/_rels/drawing1.xml.rels',enc.encode(drawingRels));
+  upsertFile(files,'xl/media/image1.png',png);
+
+  const ct=files.find(f=>f.name==='[Content_Types].xml');
+  if(ct){let x=dec.decode(ct.data);if(!/<Default Extension="png"/.test(x))x=x.replace('</Types>','<Default Extension="png" ContentType="image/png"/></Types>');if(!/PartName="\/xl\/drawings\/drawing1\.xml"/.test(x))x=x.replace('</Types>','<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');ct.data=enc.encode(x);}
+}
 function buildCompanyXlsx(){
   const work=companyRows();
   const odoReadings=reconciledOdometerReadings();
@@ -512,6 +568,7 @@ function buildCompanyXlsx(){
   let wb=dec.decode(wbFile.data);
   wb=wb.replace(/<calcPr[^>]*\/>/, '<calcPr calcId="191029" fullCalcOnLoad="1" forceFullCalc="1"/>');
   wbFile.data=enc.encode(wb);
+  addSignatureToWorkbook(files,sheetFile);
   return makeZip(files);
 }
 

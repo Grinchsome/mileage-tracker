@@ -1,7 +1,7 @@
 {
-  "name": "Mileage Tracker Test Drive V5.4.1",
+  "name": "Mileage Tracker Test Drive V5.5",
   "short_name": "Mileage Tracker",
-  "description": "Track work and personal mileage with traffic-aware routes, odometer updates and monthly mileage returns.",
+  "description": "Track work and personal mileage with traffic-aware routes, odometer updates, driver signature and monthly mileage returns.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

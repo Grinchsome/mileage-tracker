@@ -18,7 +18,7 @@
   <header>
     <div>
       <div class="brand">Mileage Tracker</div>
-      <div class="subtle">Test Drive v5.4.1</div>
+      <div class="subtle">Test Drive v5.5</div>
     </div>
     <div class="header-actions">
       <button id="installBtn" class="mini primary hidden">Install</button>
@@ -143,6 +143,13 @@
     <div class="field"><label>Month start odometer</label><input id="monthStartInput" type="number" inputmode="decimal" step="0.1" /></div>
     <div class="field"><label>Month end odometer</label><input id="monthEndInput" type="number" inputmode="decimal" step="0.1" /></div>
   </div>
+  <div class="signature-settings">
+    <div class="row space"><div><strong>Driver Signature</strong><div class="small">Saved only on this device.</div></div><button class="mini outline" id="editSignatureBtn" type="button">ADD / UPDATE</button></div>
+    <div id="signaturePreviewWrap" class="signature-preview-wrap hidden"><img id="signaturePreview" alt="Saved driver signature preview" /></div>
+    <div id="signatureEmpty" class="small subtle top-gap-small">No signature saved yet.</div>
+    <label class="signature-check"><input id="includeSignatureInput" type="checkbox" /> <span>Include saved signature in Company XLSX / PDF</span></label>
+    <button class="mini signature-clear hidden" id="clearSignatureBtn" type="button">Clear signature</button>
+  </div>
   <button class="btn primary" id="saveSettingsBtn">SAVE SETTINGS</button>
   <button class="btn outline" id="closeSettingsBtn">Close</button>
   <button class="btn danger" id="resetBtn">Reset journey data</button><div class="small subtle top-gap-small">Clears journeys and totals but keeps your driver, van, Home/Work locations, Google API key and current odometer.</div>
@@ -182,6 +189,17 @@
   <div class="field"><label>Distance (miles)</label><input id="missedMiles" type="number" inputmode="decimal" step="0.01" /></div>
   <button class="btn primary" id="saveMissedBtn">SAVE JOURNEY</button>
   <button class="btn outline" id="closeMissedBtn">Cancel</button>
+</div></div>
+
+<div id="signatureModal" class="modal hidden"><div class="sheet">
+  <h3>Driver Signature</h3>
+  <div class="small">Sign in the box with your finger or stylus. This signature stays on this device and can be placed into the Driver Signature area of the company return.</div>
+  <div class="signature-pad-wrap top-gap"><canvas id="signatureCanvas" width="700" height="240" aria-label="Driver signature pad"></canvas></div>
+  <div class="grid2 compact-actions">
+    <button class="btn outline" id="clearSignaturePadBtn" type="button">CLEAR</button>
+    <button class="btn primary" id="saveSignaturePadBtn" type="button">SAVE SIGNATURE</button>
+  </div>
+  <button class="btn outline" id="closeSignaturePadBtn" type="button">Cancel</button>
 </div></div>
 
 <div id="returnModal" class="modal hidden"><div class="sheet">
