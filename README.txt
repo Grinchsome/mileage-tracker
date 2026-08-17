@@ -1,8 +1,8 @@
-Mileage Tracker - Test Drive V5.6.1
+Mileage Tracker - Test Drive V5.6.2
 
 WHAT IS NEW
 - Driver Signature in Settings. Sign once with a finger/stylus, then preview, replace or clear it.
-- V5.6.1 preserves the signature aspect ratio and positions it above the Driver Signature line.
+- V5.6.2 preserves the signature aspect ratio and positions it above the Driver Signature line.
 - Newly saved signatures are trimmed to their ink area with a small margin before being stored.
 - Signature is stored only in this browser/device local data.
 - "Include saved signature in Company XLSX / PDF" controls whether it is placed into the Driver Signature area of the company workbook.
@@ -18,3 +18,5 @@ Open Settings > Driver Signature > ADD / UPDATE. Sign in the pad and tap SAVE SI
 
 PRIVACY
 The signature is stored in local browser storage with your other app settings. It is not uploaded to GitHub by this app.
+
+V5.6.2 forces versioned JavaScript URLs so the installed PWA cannot show a new shell while using an older cached export script.
