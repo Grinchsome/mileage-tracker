@@ -1,7 +1,9 @@
-Mileage Tracker - Test Drive V5.5
+Mileage Tracker - Test Drive V5.6
 
 WHAT IS NEW
 - Driver Signature in Settings. Sign once with a finger/stylus, then preview, replace or clear it.
+- V5.6 preserves the signature aspect ratio in the company return instead of stretching it to fill the signature box.
+- Newly saved signatures are trimmed to their ink area with a small margin before being stored.
 - Signature is stored only in this browser/device local data.
 - "Include saved signature in Company XLSX / PDF" controls whether it is placed into the Driver Signature area of the company workbook.
 - The signature is embedded as an image in the generated XLSX, so it should also appear when that workbook is printed or saved as PDF.
@@ -9,7 +11,7 @@ WHAT IS NEW
 - Keeps the current tracked-van v3 app icons.
 
 UPDATE
-Upload all files over the files already in your mileage-tracker GitHub repository. Wait for GitHub Pages to deploy, then fully close and reopen the installed app. The header should show Test Drive v5.5.
+Upload all files over the files already in your mileage-tracker GitHub repository. Wait for GitHub Pages to deploy, then fully close and reopen the installed app. The header should show Test Drive v5.6.
 
 SIGNATURE
 Open Settings > Driver Signature > ADD / UPDATE. Sign in the pad and tap SAVE SIGNATURE. Leave "Include saved signature in Company XLSX / PDF" ticked to add it automatically to the company return.

@@ -351,7 +351,17 @@ $('#clearSignatureBtn').onclick=()=>{if(!confirm('Clear the saved driver signatu
 signatureCanvas().addEventListener('pointerdown',e=>{signatureDrawing=true;signatureHasInk=true;signatureCanvas().setPointerCapture?.(e.pointerId);const p=signaturePoint(e),ctx=signatureCtx();ctx.beginPath();ctx.moveTo(p.x,p.y);e.preventDefault();});
 signatureCanvas().addEventListener('pointermove',e=>{if(!signatureDrawing)return;const p=signaturePoint(e),ctx=signatureCtx();ctx.lineTo(p.x,p.y);ctx.stroke();e.preventDefault();});
 ['pointerup','pointercancel','pointerleave'].forEach(type=>signatureCanvas().addEventListener(type,e=>{if(signatureDrawing){signatureCtx().closePath();signatureDrawing=false;}e.preventDefault();}));
-$('#saveSignaturePadBtn').onclick=()=>{if(!signatureHasInk)return alert('Please add your signature first.');state.settings.signatureData=signatureCanvas().toDataURL('image/png');state.settings.includeSignature=true;$('#includeSignatureInput').checked=true;save();renderSignatureSettings();$('#signatureModal').classList.add('hidden');};
+function croppedSignatureDataUrl(){
+  const c=signatureCanvas(),ctx=c.getContext('2d'),img=ctx.getImageData(0,0,c.width,c.height),d=img.data;
+  let minX=c.width,minY=c.height,maxX=-1,maxY=-1;
+  for(let y=0;y<c.height;y++) for(let x=0;x<c.width;x++){const a=d[(y*c.width+x)*4+3];if(a>8){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}}
+  if(maxX<minX||maxY<minY)return '';
+  const pad=18; minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);maxX=Math.min(c.width-1,maxX+pad);maxY=Math.min(c.height-1,maxY+pad);
+  const w=maxX-minX+1,h=maxY-minY+1,out=document.createElement('canvas');out.width=w;out.height=h;
+  out.getContext('2d').drawImage(c,minX,minY,w,h,0,0,w,h);
+  return out.toDataURL('image/png');
+}
+$('#saveSignaturePadBtn').onclick=()=>{if(!signatureHasInk)return alert('Please add your signature first.');const cropped=croppedSignatureDataUrl();if(!cropped)return alert('Please add your signature first.');state.settings.signatureData=cropped;state.settings.includeSignature=true;$('#includeSignatureInput').checked=true;save();renderSignatureSettings();$('#signatureModal').classList.add('hidden');};
 
 $('#settingsBtn').onclick=()=>{
   const s=state.settings; $('#driverInput').value=s.driver||'';$('#vanRegInput').value=s.vanReg||'';$('#homeLocationInput').value=s.homeLocation||'';$('#workLocationInput').value=s.workLocation||'';$('#mapsApiKeyInput').value=s.mapsApiKey||'';$('#currentOdoInput').value=s.currentOdo??'';$('#monthStartInput').value=s.monthStartOdo??'';$('#monthEndInput').value=s.monthEndOdo??'';
@@ -518,7 +528,11 @@ function addSignatureToWorkbook(files,sheetFile){
   if(!/relationships\/drawing/.test(relXml)) relXml=relXml.replace('</Relationships>','<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>');
   upsertFile(files,relName,enc.encode(relXml));
 
-  const drawing=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>4</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>46</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>8</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>48</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Driver Signature"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm/><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
+  let sigW=700,sigH=240;
+  if(png.length>=24&&png[12]===73&&png[13]===72&&png[14]===68&&png[15]===82){const v=new DataView(png.buffer,png.byteOffset,png.byteLength);sigW=v.getUint32(16);sigH=v.getUint32(20);}
+  const ratio=Math.max(.5,Math.min(12,sigW/Math.max(1,sigH))),maxW=2969260,maxH=502920;
+  let cy=maxH,cx=Math.round(cy*ratio);if(cx>maxW){cx=maxW;cy=Math.round(cx/ratio);}const boxW=2969260,colOff=Math.max(0,Math.round((boxW-cx)/2));
+  const drawing=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>4</xdr:col><xdr:colOff>${colOff}</xdr:colOff><xdr:row>46</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${cx}" cy="${cy}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Driver Signature"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>`;
   const drawingRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>`;
   upsertFile(files,'xl/drawings/drawing1.xml',enc.encode(drawing));
   upsertFile(files,'xl/drawings/_rels/drawing1.xml.rels',enc.encode(drawingRels));
